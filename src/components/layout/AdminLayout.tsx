@@ -1,3 +1,4 @@
+// C:\Users\Renz Jericho Buday\KapitBahay\src\components\layout\AdminLayout.tsx
 import { Outlet, Link, useLocation } from "react-router-dom";
 import {
   Activity,
@@ -50,10 +51,10 @@ export default function AdminLayout() {
     <div className="flex flex-col md:flex-row w-screen h-screen bg-slate-50 dark:bg-[#050E1F] text-slate-900 dark:text-white overflow-hidden font-sans transition-colors duration-300">
       <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-[#0A1628] border-r border-red-200 dark:border-red-900/30 flex-shrink-0 h-full transition-colors duration-300">
         <div className="h-16 flex items-center px-6 border-b border-red-200 dark:border-red-900/30 bg-slate-50/50 dark:bg-[#050E1F]/50">
-          <Link to="/" className="text-xl font-black text-red-600 dark:text-red-500 flex items-center gap-2">
+          <div className="text-xl font-black text-red-600 dark:text-red-500 flex items-center gap-2 cursor-default select-none">
             <ShieldAlert className="w-5 h-5" />
             NDRRMC Admin
-          </Link>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto py-4">
@@ -69,7 +70,7 @@ export default function AdminLayout() {
                   key={item.name}
                   to={item.path}
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${isActive
-                    ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/20"
+                    ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50"
                     : "text-slate-500 dark:text-[#94A3B8] hover:bg-slate-100 dark:hover:bg-[#0D1B35] hover:text-slate-900 dark:hover:text-white"
                     }`}
                 >

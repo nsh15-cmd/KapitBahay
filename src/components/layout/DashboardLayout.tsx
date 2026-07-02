@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard,
   Map as MapIcon,
   ClipboardList,
   Settings,
@@ -14,6 +13,8 @@ import {
   Sun,
   BrainCircuit
 } from "lucide-react";
+import { signOut } from "firebase/auth";
+import { auth } from "../../lib/firebase";
 import { useTheme } from "../../App";
 
 export default function DashboardLayout() {
@@ -21,13 +22,20 @@ export default function DashboardLayout() {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
 
-  // Optimized to align perfectly with App.tsx routes configuration parameters
   const navItems = [
     { name: "Triage Matrix", path: "/dashboard", icon: BrainCircuit },
     { name: "Incident Map", path: "/dashboard/map", icon: MapIcon },
     { name: "Live Feed List", path: "/dashboard/reports", icon: ClipboardList },
     { name: "System Settings", path: "/dashboard/settings", icon: Settings },
   ];
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Error signing out LGU:", error);
+    }
+  };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -37,10 +45,10 @@ export default function DashboardLayout() {
       {/* DESKTOP SIDEBAR DRAWER */}
       <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-[#0D1B35] border-r border-slate-200 dark:border-[#1E293B] transition-colors duration-300">
         <div className="h-16 flex items-center px-6 border-b border-slate-200 dark:border-[#1E293B]">
-          <Link to="/" className="text-xl font-black text-[#06B6D4] flex items-center gap-2">
+          <div className="text-xl font-black text-[#06B6D4] flex items-center gap-2 cursor-default select-none">
             <ShieldAlert className="w-5 h-5" />
             KapitBahay LGU
-          </Link>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto py-4">
@@ -82,22 +90,22 @@ export default function DashboardLayout() {
               </p>
             </div>
           </div>
-          <Link
-            to="/"
-            className="mt-2 flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors w-full"
+          <button
+            onClick={handleLogout}
+            className="mt-2 flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors w-full text-left"
           >
             <LogOut className="w-4 h-4" />
             Sign Out
-          </Link>
+          </button>
         </div>
       </aside>
 
       {/* MOBILE FLOATING HEADER NAV */}
       <div className="md:hidden flex items-center justify-between h-16 px-4 bg-white dark:bg-[#0D1B35] border-b border-slate-200 dark:border-[#1E293B] absolute top-0 left-0 right-0 z-20">
-        <Link to="/" className="text-lg font-black text-[#06B6D4] flex items-center gap-2">
+        <div className="text-lg font-black text-[#06B6D4] flex items-center gap-2 cursor-default select-none">
           <ShieldAlert className="w-4 h-4" />
           KapitBahay LGU
-        </Link>
+        </div>
         <button
           onClick={() => setIsMobileMenuOpen(true)}
           className="p-2 text-slate-500 dark:text-[#94A3B8] hover:text-slate-900 dark:hover:text-white"
@@ -138,6 +146,16 @@ export default function DashboardLayout() {
                     </Link>
                   );
                 })}
+                <button
+                  onClick={() => {
+                    closeMobileMenu();
+                    handleLogout();
+                  }}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors w-full text-left mt-4 border border-transparent active:border-red-200"
+                >
+                  <LogOut className="w-5 h-5" />
+                  Sign Out
+                </button>
               </nav>
             </div>
           </div>

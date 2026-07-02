@@ -1,3 +1,4 @@
+// C:\Users\Renz Jericho Buday\KapitBahay\src\components\layout\CitizenLayout.tsx
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { ClipboardList, Map, LogOut, ShieldAlert, Moon, Sun } from "lucide-react";
 import { signOut } from "firebase/auth";
@@ -34,10 +35,10 @@ export default function CitizenLayout() {
         <div className="flex flex-col md:flex-row h-screen bg-slate-50 dark:bg-[#050E1F] text-slate-900 dark:text-white overflow-hidden font-sans relative transition-colors duration-300">
             <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-[#0A1628] border-r border-teal-200 dark:border-teal-900/30 flex-shrink-0 transition-colors duration-300">
                 <div className="h-16 flex items-center px-6 border-b border-teal-200 dark:border-teal-900/30 bg-slate-50/50 dark:bg-[#050E1F]/50">
-                    <Link to="/" className="text-xl font-black text-teal-600 dark:text-teal-400 flex items-center gap-2">
+                    <div className="text-xl font-black text-teal-600 dark:text-teal-400 flex items-center gap-2 cursor-default select-none">
                         <ShieldAlert className="w-5 h-5" />
                         KapitBahay Node
-                    </Link>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto py-4">
@@ -102,7 +103,7 @@ export default function CitizenLayout() {
                 <Outlet />
             </main>
 
-            <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-[#0A1628] border-t border-teal-200 dark:border-teal-900/30 flex items-center justify-around px-2 z-50">
+            <nav className="nav-container-fixed md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-[#0A1628] border-t border-teal-200 dark:border-teal-900/30 flex items-center justify-around px-2 z-50">
                 {navItems.map((item) => {
                     const isActive = location.pathname === item.path;
                     const Icon = item.icon;
