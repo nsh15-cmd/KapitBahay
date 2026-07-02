@@ -118,7 +118,7 @@ export default function Reports() {
             if (success) {
                 alert("Bluetooth sharing started. Keep the app open while another nearby device is in range.");
             } else {
-                alert("Bluetooth transfer is not available right now. On Android, please allow Bluetooth and Location permissions for this app, turn on Bluetooth, and try again from a native build.");
+                alert("Bluetooth transfer is not available right now. On Android, the prompt may appear as Nearby devices and Location. Please allow both, turn on Bluetooth, and try again from a native build.");
             }
         } catch (error) {
             console.error("Bluetooth sharing error:", error);

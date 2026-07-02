@@ -59,6 +59,15 @@ const getClusterSize = (zoom: number) => {
   return 0.25;
 };
 
+const isReportVisible = (report: LocalReport, now = Date.now()) => {
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  const currentStatus = report.lifecycleStatus || report.status;
+  if (currentStatus === "resolved") {
+    return (now - report.timestamp) < ONE_DAY_MS;
+  }
+  return true;
+};
+
 export default function PublicMap() {
   const [localReports, setLocalReports] = useState<LocalReport[]>([]);
   const [remoteReports, setRemoteReports] = useState<LocalReport[]>([]);
@@ -96,22 +105,11 @@ export default function PublicMap() {
         merged.push(report);
       }
     });
-    return merged;
+    return merged.filter((report) => isReportVisible(report));
   }, [localReports, remoteReports]);
 
   // UI CLEANUP LOGIC: Hide "Solved" reports from normal users after 1 day (24 hours)
-  const visibleReports = useMemo(() => {
-    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-    const now = Date.now();
-
-    return mergedReports.filter(report => {
-      const currentStatus = report.lifecycleStatus || report.status;
-      if (currentStatus === "resolved") {
-        return (now - report.timestamp) < ONE_DAY_MS;
-      }
-      return true;
-    });
-  }, [mergedReports]);
+  const visibleReports = useMemo(() => mergedReports, [mergedReports]);
 
   const reportCounts = useMemo(
     () => ({
@@ -284,7 +282,7 @@ export default function PublicMap() {
         }
 
         const data = await getPendingReports();
-        if (!cancelled) setLocalReports(data);
+        if (!cancelled) setLocalReports(data.filter((report) => isReportVisible(report)));
       }
     };
 
@@ -341,10 +339,11 @@ export default function PublicMap() {
             return getDistanceInKm(report.location.lat, report.location.lng, activeCenter.lat, activeCenter.lng) <= queryRadiusKm;
           });
 
-        setRemoteReports(fetched);
+        const visibleFetched = fetched.filter((report) => isReportVisible(report));
+        setRemoteReports(visibleFetched);
         setSelectedReport(currentSelected => {
           if (!currentSelected) return null;
-          return fetched.find(r => r._id === currentSelected._id) || currentSelected;
+          return visibleFetched.find(r => r._id === currentSelected._id) || null;
         });
       },
       (error) => console.error("Error fetching remote reports for map:", error)

@@ -3,7 +3,10 @@ import { BluetoothLowEnergy } from '@capgo/capacitor-bluetooth-low-energy';
 import { Capacitor } from '@capacitor/core';
 
 export const requestMeshHardwarePermissions = async (): Promise<{ ok: boolean; reason?: string }> => {
-    if (Capacitor.getPlatform() === 'web') {
+    const platform = Capacitor.getPlatform();
+    const isNativeMobile = platform === 'android' || platform === 'ios';
+
+    if (!isNativeMobile) {
         return { ok: true };
     }
 
@@ -13,7 +16,7 @@ export const requestMeshHardwarePermissions = async (): Promise<{ ok: boolean; r
             return { ok: false, reason: 'Bluetooth plugin is unavailable on this build.' };
         }
 
-        if (Capacitor.getPlatform() === 'android') {
+        if (platform === 'android') {
             console.log('🛡️ Requesting Android native permissions for BLE mesh...');
             const permissionStatus = await BluetoothLowEnergy.requestPermissions();
             const bluetoothGranted = permissionStatus.bluetooth === 'granted' || permissionStatus.bluetooth === 'limited';
@@ -23,7 +26,7 @@ export const requestMeshHardwarePermissions = async (): Promise<{ ok: boolean; r
                 console.warn('⚠️ BLE permissions were not fully granted.');
                 return {
                     ok: false,
-                    reason: 'Please allow Bluetooth and Location permissions for this app in Android settings.'
+                    reason: 'Android may show this as Nearby devices and Location permissions. Please allow both to enable nearby pairing.'
                 };
             }
         }

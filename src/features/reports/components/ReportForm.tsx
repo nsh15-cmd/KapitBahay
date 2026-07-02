@@ -1,5 +1,6 @@
 // C:\Users\Renz Jericho Buday\KapitBahay\src\features\reports\components\ReportForm.tsx
 import { useEffect, useMemo, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { AlertTriangle, CheckCircle, ChevronRight, Heart, HeartHandshake, LifeBuoy, Navigation, ShieldAlert, Wifi, WifiOff, Camera, MapPin, User, FileText, X, EyeOff } from "lucide-react";
 import { saveCachedLocation, getCachedLocation } from "../../../lib/indexedDb";
 import type { LocalReport, ReportCategory } from "../../../lib/indexedDb";
@@ -77,11 +78,26 @@ export default function ReportForm({ onClose }: { onClose?: () => void }) {
   const [isLocating, setIsLocating] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [statusText, setStatusText] = useState<string | null>(null);
+  const [permissionNotice, setPermissionNotice] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
   const defaultCachedName = useMemo(() => {
     return user?.displayName?.trim() || user?.email?.split("@")[0]?.trim() || "Anonymous Resident";
   }, [user]);
+
+  useEffect(() => {
+    const preparePermissions = async () => {
+      if (Capacitor.getPlatform() !== "android") return;
+      const permissionResult = await requestMeshHardwarePermissions();
+      if (!permissionResult.ok) {
+        setPermissionNotice(permissionResult.reason ?? "Nearby pairing needs Nearby devices and Location access.");
+      } else {
+        setPermissionNotice(null);
+      }
+    };
+
+    void preparePermissions();
+  }, []);
 
   useEffect(() => {
     const loadCachedLocation = async () => {
@@ -314,6 +330,11 @@ export default function ReportForm({ onClose }: { onClose?: () => void }) {
       </div>
 
       <div className="p-5 sm:p-8">
+        {permissionNotice && (
+          <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+            {permissionNotice}
+          </div>
+        )}
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">Report Incident</h1>

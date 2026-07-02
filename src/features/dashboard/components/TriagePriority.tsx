@@ -2,10 +2,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { signOut } from "firebase/auth";
-import { doc, getDoc, updateDoc } from "firebase/firestore"; // Added updateDoc
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import {
     AlertTriangle, ShieldAlert, Flame, Sparkles, Brain,
-    MapPin, Shield, Truck, Loader2, LogOut
+    MapPin, Shield, Truck, Loader2, LogOut, CheckCircle2
 } from "lucide-react";
 import { useReportsStore } from "../../../store/useReportsStore";
 import type { LocalReport, ReportLifecycleStatus } from "../../../lib/indexedDb";
@@ -21,7 +21,6 @@ export interface TriageAnalysis {
     recommendedUnit: string;
 }
 
-// Extend your LocalReport type locally to include the new DB field
 type ReportWithAI = LocalReport & { aiTriage?: TriageAnalysis };
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
@@ -36,7 +35,10 @@ export default function TriagePriority() {
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [approvalStatus, setApprovalStatus] = useState<"checking" | "approved" | "pending">("checking");
 
-    // LGU Authorization Check
+    // Optimistic UI States for instant feedback
+    const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+    const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, string>>({});
+
     useEffect(() => {
         let cancelled = false;
 
@@ -69,7 +71,6 @@ export default function TriagePriority() {
         };
     }, [hydrateReports, startLiveStream, user, role]);
 
-    // Fail-safe heuristic logic
     const getFallbackTriage = (report: LocalReport, reason: string): TriageAnalysis => {
         const base = report.category === "rescue"
             ? { score: 95, tier: "CRITICAL_ACTION" as const, recommendedUnit: "Ambulance / Search & Rescue" }
@@ -80,96 +81,101 @@ export default function TriagePriority() {
         return {
             ...base,
             impactAnalysis: report.synced
-                ? `Cloud-backed assessment ready. ${reason}`
+                ? `System fallback active. ${reason}`
                 : `Queued offline for dispatch review. ${reason}`,
         };
     };
 
-    // Continuous AI processing queue
     useEffect(() => {
         const executeAITriage = async (report: ReportWithAI) => {
-            // 🛑 STOP: If the DB already has the AI Triage, skip generating a new one!
             if (report.aiTriage) return;
 
             if (!GEMINI_API_KEY) {
-                console.warn(`[DEBUG - AI Triage] ⚠️ No API key found. Using fallback for ID: ${report._id}`);
-                setAiAssessments(prev => ({ ...prev, [report._id]: getFallbackTriage(report, "AI triage is unavailable, so the report is using the offline dispatch fallback.") }));
+                setAiAssessments(prev => ({ ...prev, [report._id]: getFallbackTriage(report, "AI triage is unavailable due to missing API key.") }));
                 return;
             }
 
             setActiveAnalysisId(report._id);
-            console.log(`[DEBUG - AI Triage] 🤖 Starting AI evaluation for report ID: ${report._id} ("${report.title}")`);
 
             try {
                 const model = genAI.getGenerativeModel({
                     model: "gemini-3.1-flash-lite",
+                    // Forcing JSON response type ensures the model formats its output correctly
                     generationConfig: { responseMimeType: "application/json" }
                 });
 
+                // 🔥 OPTIMIZED PROMPT: Clear structure, strict boundaries, and schema enforcement
                 const prompt = `
-                    You are an advanced emergency disaster triage dispatch director evaluating community intelligence reports.
-                    Analyze this report to establish response priority based on immediate threats to human life, entrapment, medical status, or cascading infrastructure failure.
-                    
-                    Incident Category: ${report.category}
-                    Incident Title: ${report.title}
-                    Description Details: ${report.description || "No description given."}
-                    Attached Reference Location: ${report.locationText || "GPS Coordinates Pinpointed"}
-                    
-                    Respond strictly with a JSON object using this schema:
-                    {"score": <number 1-100>, "tier": "CRITICAL_ACTION" | "HIGH_ATTENTION" | "ROUTINE_LOG", "impactAnalysis": "<1-sentence impact statement>", "recommendedUnit": "<Specific Emergency Unit Name>"}
-                `;
+You are an expert emergency disaster triage AI for a community reporting app. Evaluate the incident below and assign a priority tier.
 
-                console.log(`[DEBUG - AI Triage] 📡 Sending prompt to Gemini...`);
+### Categorization Rules:
+1. "CRITICAL_ACTION" (Score 80-100): IMMEDIATE threat to human life or critical infrastructure. Examples: active fires with trapped people, severe medical emergencies, structural collapse, active violent threats.
+2. "HIGH_ATTENTION" (Score 50-79): Significant hazards and community disruptions without immediate life threat. Examples: flooded streets blocking roads, fallen trees, downed live power lines, broken water mains.
+3. "ROUTINE_LOG" (Score 1-49): Minor inconveniences or general status updates. Examples: noise complaints, small potholes, litter, light weather updates.
+
+### Incident Details:
+- Category: ${report.category}
+- Title: ${report.title}
+- Description: ${report.description || "No description provided."}
+- Location: ${report.locationText || "GPS Coordinates Attached"}
+
+### Output Format:
+Respond strictly with a valid JSON object matching this exact schema. Do not include any markdown formatting or extra text.
+{
+  "score": <number between 1-100>,
+  "tier": "<Must be exactly CRITICAL_ACTION, HIGH_ATTENTION, or ROUTINE_LOG>",
+  "impactAnalysis": "<A sharp, 1-sentence analytical assessment of the situation's impact>",
+  "recommendedUnit": "<Specific Unit Name, e.g., Ambulance, BFP, PNP, Public Works, Barangay Rescue, or Standby>"
+}`;
+
                 const result = await model.generateContent(prompt);
-                const responseText = result.response.text();
+                let responseText = result.response.text();
+
+                // Fallback cleanup just in case the model ignores the "no markdown" rule
+                responseText = responseText.replace(/^```(json)?\n?/i, '').replace(/\n?```$/i, '').trim();
 
                 const analysis = JSON.parse(responseText) as TriageAnalysis;
-                console.log(`[DEBUG - AI Triage] ✅ Successfully parsed AI analysis:`, analysis);
 
-                // 1. Update the UI state immediately
                 setAiAssessments(prev => ({ ...prev, [report._id]: analysis }));
 
-                // 2. Save the AI result to Firebase so we NEVER have to run AI for this report again
                 if (report.synced) {
                     try {
                         await updateDoc(doc(db, "reports", report._id), { aiTriage: analysis });
-                        console.log(`[DEBUG - AI Triage] 💾 Permanently saved AI Data to Database for ID: ${report._id}`);
                     } catch (dbErr) {
-                        console.error(`[DEBUG - AI Triage] ⚠️ DB save failed, but UI is updated:`, dbErr);
+                        console.error(`[DEBUG - AI Triage] ⚠️ DB save failed:`, dbErr);
                     }
                 }
 
-            } catch (err) {
-                console.error(`[DEBUG - AI Triage] ❌ AI evaluation failed for ID ${report._id}:`, err);
-                setAiAssessments(prev => ({ ...prev, [report._id]: getFallbackTriage(report, "The AI model failed, so the report remains queued for manual dispatch review.") }));
+            } catch (err: any) {
+                console.error(`[DEBUG - AI Triage] ❌ AI CRASH for ID ${report._id}. Reason:`, err?.message || err);
+                setAiAssessments(prev => ({ ...prev, [report._id]: getFallbackTriage(report, "The AI API request failed or timed out.") }));
             } finally {
                 setActiveAnalysisId(null);
             }
         };
 
-        // Find the next report that DOES NOT have DB data (r.aiTriage) and DOES NOT have local state data
-        const nextInQueue = (reports as ReportWithAI[]).find(
-            r => !r.aiTriage && !aiAssessments[r._id] && r.lifecycleStatus !== "resolved" && r.lifecycleStatus !== "false_report"
-        );
+        const nextInQueue = (reports as ReportWithAI[]).find(r => {
+            const currentStatus = optimisticStatuses[r._id] || r.lifecycleStatus || r.status;
+            return !r.aiTriage && !aiAssessments[r._id] && currentStatus !== "resolved" && currentStatus !== "false_report" && !hiddenIds.has(r._id);
+        });
 
         if (nextInQueue && !activeAnalysisId) {
-            console.log(`[DEBUG - AI Triage] 🚨 New offline report detected. Handing to AI: ID ${nextInQueue._id}`);
             executeAITriage(nextInQueue);
         }
-    }, [reports, aiAssessments, activeAnalysisId]);
+    }, [reports, aiAssessments, activeAnalysisId, hiddenIds, optimisticStatuses]);
 
-    // Matrix structuring
     const structuredTriageData = useMemo(() => {
         return (reports as ReportWithAI[])
-            .filter(r => r.lifecycleStatus !== "resolved" && r.lifecycleStatus !== "false_report")
+            .filter(r => {
+                const currentStatus = optimisticStatuses[r._id] || r.lifecycleStatus || r.status;
+                return currentStatus !== "resolved" && currentStatus !== "false_report" && !hiddenIds.has(r._id);
+            })
             .map(r => ({
                 ...r,
-                // UI Priority Order: 1. Data from Database -> 2. Data from active AI run -> 3. Fallback logic
-                triage: r.aiTriage || aiAssessments[r._id] || getFallbackTriage(r, "The report is still waiting for its first triage evaluation.")
+                triage: r.aiTriage || aiAssessments[r._id] || getFallbackTriage(r, "Waiting in queue for AI evaluation.")
             }));
-    }, [reports, aiAssessments]);
+    }, [reports, aiAssessments, hiddenIds, optimisticStatuses]);
 
-    // Column splitting
     const columns = useMemo(() => {
         return {
             CRITICAL_ACTION: structuredTriageData.filter(r => r.triage.tier === "CRITICAL_ACTION"),
@@ -180,8 +186,28 @@ export default function TriagePriority() {
 
     const handleSetStatus = async (reportId: string, status: ReportLifecycleStatus) => {
         setUpdatingId(reportId);
-        await updateLifecycleStatus(reportId, status);
-        setUpdatingId(null);
+        setOptimisticStatuses(prev => ({ ...prev, [reportId]: status }));
+
+        if (status === "resolved" || status === "false_report") {
+            setHiddenIds(prev => new Set(prev).add(reportId));
+        }
+
+        try {
+            await updateLifecycleStatus(reportId, status);
+
+            if (navigator.onLine) {
+                const reportRef = doc(db, "reports", reportId);
+                await updateDoc(reportRef, {
+                    lifecycleStatus: status,
+                    status: status,
+                    synced: true
+                });
+            }
+        } catch (error) {
+            console.error(`[DEBUG - DB Sync] ❌ Failed to update status:`, error);
+        } finally {
+            setUpdatingId(null);
+        }
     };
 
     const handleExit = async () => {
@@ -271,7 +297,7 @@ export default function TriagePriority() {
                         {columns.CRITICAL_ACTION.length === 0 ? (
                             <p className="text-xs text-center text-slate-400 py-6 italic border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">No critical threats found.</p>
                         ) : (
-                            columns.CRITICAL_ACTION.map(r => <TriageCard key={r._id} report={r} onSetStatus={handleSetStatus} isUpdating={updatingId === r._id} />)
+                            columns.CRITICAL_ACTION.map(r => <TriageCard key={r._id} report={r} onSetStatus={handleSetStatus} isUpdating={updatingId === r._id} optimisticStatus={optimisticStatuses[r._id]} />)
                         )}
                     </div>
                 </div>
@@ -291,7 +317,7 @@ export default function TriagePriority() {
                         {columns.HIGH_ATTENTION.length === 0 ? (
                             <p className="text-xs text-center text-slate-400 py-6 italic border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">High attention logs clear.</p>
                         ) : (
-                            columns.HIGH_ATTENTION.map(r => <TriageCard key={r._id} report={r} onSetStatus={handleSetStatus} isUpdating={updatingId === r._id} />)
+                            columns.HIGH_ATTENTION.map(r => <TriageCard key={r._id} report={r} onSetStatus={handleSetStatus} isUpdating={updatingId === r._id} optimisticStatus={optimisticStatuses[r._id]} />)
                         )}
                     </div>
                 </div>
@@ -311,7 +337,7 @@ export default function TriagePriority() {
                         {columns.ROUTINE_LOG.length === 0 ? (
                             <p className="text-xs text-center text-slate-400 py-6 italic border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">No general monitoring tracking.</p>
                         ) : (
-                            columns.ROUTINE_LOG.map(r => <TriageCard key={r._id} report={r} onSetStatus={handleSetStatus} isUpdating={updatingId === r._id} />)
+                            columns.ROUTINE_LOG.map(r => <TriageCard key={r._id} report={r} onSetStatus={handleSetStatus} isUpdating={updatingId === r._id} optimisticStatus={optimisticStatuses[r._id]} />)
                         )}
                     </div>
                 </div>
@@ -322,14 +348,16 @@ export default function TriagePriority() {
 }
 
 // TRIAGE CARD INNER COMPONENT MODULE
-function TriageCard({ report, onSetStatus, isUpdating }: { report: any; onSetStatus: (id: string, status: ReportLifecycleStatus) => void; isUpdating: boolean }) {
+function TriageCard({ report, onSetStatus, isUpdating, optimisticStatus }: { report: any; onSetStatus: (id: string, status: ReportLifecycleStatus) => void; isUpdating: boolean; optimisticStatus?: string; }) {
+
+    const currentStatus = optimisticStatus || report.lifecycleStatus || report.status || "pending";
 
     return (
         <div className="bg-white dark:bg-[#0D1B35] border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-4 transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-2">
             <div className="flex justify-between items-start gap-2">
                 <div className="space-y-0.5">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                        SCORE VALUE: {report.triage.score}/100
+                        SCORE VALUE: {report.triage?.score || 0}/100
                     </span>
                     <h4 className="text-base font-black text-slate-900 dark:text-white leading-tight">
                         {report.title}
@@ -348,12 +376,12 @@ function TriageCard({ report, onSetStatus, isUpdating }: { report: any; onSetSta
                     <Sparkles className="w-3 h-3" /> Impact Vector Estimate
                 </div>
                 <p className="text-[11px] font-medium leading-snug text-slate-700 dark:text-slate-300">
-                    {report.triage.impactAnalysis}
+                    {report.triage?.impactAnalysis || "Pending..."}
                 </p>
 
                 <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-2 rounded-xl border border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400">
                     <Truck className="w-3.5 h-3.5 text-teal-500" />
-                    <span>Recommended unit: <strong className="text-slate-700 dark:text-slate-200">{report.triage.recommendedUnit}</strong></span>
+                    <span>Recommended unit: <strong className="text-slate-700 dark:text-slate-200">{report.triage?.recommendedUnit || "Standby"}</strong></span>
                 </div>
             </div>
 
@@ -362,17 +390,56 @@ function TriageCard({ report, onSetStatus, isUpdating }: { report: any; onSetSta
                 <MapPin className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{report.locationText || "GPS Coordinates Attached"}</span>
             </div>
 
-            {/* LGU AUTHORITY TOOLS (Mirrored from PublicMap) */}
+            {/* LGU AUTHORITY TOOLS */}
             <div className="mt-2 rounded-xl bg-slate-100 p-2 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
                 <p className="mb-2 text-center text-[9px] font-bold uppercase tracking-widest text-slate-500 flex items-center justify-center gap-1">
                     {isUpdating && <Loader2 className="w-3 h-3 animate-spin" />}
                     {isUpdating ? "Updating System..." : "Authority Tools"}
                 </p>
                 <div className="grid grid-cols-2 gap-1.5">
-                    <button disabled={isUpdating} onClick={() => onSetStatus(report._id, "pending")} className="rounded-lg bg-white py-1 text-[10px] font-bold text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-300 transition-opacity disabled:opacity-50">Pending</button>
-                    <button disabled={isUpdating} onClick={() => onSetStatus(report._id, "on_the_way")} className="rounded-lg bg-blue-50 py-1 text-[10px] font-bold text-blue-700 shadow-sm dark:bg-blue-900/30 dark:text-blue-400 transition-opacity disabled:opacity-50">On Way</button>
-                    <button disabled={isUpdating} onClick={() => onSetStatus(report._id, "false_report")} className="rounded-lg bg-red-50 py-1 text-[10px] font-bold text-red-600 shadow-sm dark:bg-red-950/30 dark:text-red-400 transition-opacity disabled:opacity-50">False</button>
-                    <button disabled={isUpdating} onClick={() => onSetStatus(report._id, "resolved")} className="rounded-lg bg-emerald-500 py-1 text-[10px] font-bold text-white shadow-sm hover:bg-emerald-400 transition-opacity disabled:opacity-50">Solved</button>
+                    {/* Pending Button */}
+                    <button
+                        disabled={isUpdating}
+                        onClick={() => onSetStatus(report._id, "pending")}
+                        className={`flex items-center justify-center gap-1 rounded-lg py-1.5 text-[10px] font-bold shadow-sm transition-colors disabled:opacity-50 ${currentStatus === "pending" || currentStatus === "synced"
+                            ? "bg-slate-700 text-white dark:bg-slate-600"
+                            : "bg-white text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                            }`}
+                    >
+                        {currentStatus === "pending" || currentStatus === "synced" ? <CheckCircle2 className="w-3 h-3" /> : null}
+                        Pending
+                    </button>
+
+                    {/* On Way Button */}
+                    <button
+                        disabled={isUpdating}
+                        onClick={() => onSetStatus(report._id, "on_the_way")}
+                        className={`flex items-center justify-center gap-1 rounded-lg py-1.5 text-[10px] font-bold shadow-sm transition-colors disabled:opacity-50 ${currentStatus === "on_the_way"
+                            ? "bg-blue-600 text-white"
+                            : "bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50"
+                            }`}
+                    >
+                        {currentStatus === "on_the_way" ? <CheckCircle2 className="w-3 h-3" /> : null}
+                        On Way
+                    </button>
+
+                    {/* False Button */}
+                    <button
+                        disabled={isUpdating}
+                        onClick={() => onSetStatus(report._id, "false_report")}
+                        className="rounded-lg bg-red-50 py-1.5 text-[10px] font-bold text-red-600 shadow-sm hover:bg-red-100 transition-colors disabled:opacity-50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-900/40"
+                    >
+                        False
+                    </button>
+
+                    {/* Solved Button */}
+                    <button
+                        disabled={isUpdating}
+                        onClick={() => onSetStatus(report._id, "resolved")}
+                        className="rounded-lg bg-emerald-500 py-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-emerald-400 transition-colors disabled:opacity-50"
+                    >
+                        Solved
+                    </button>
                 </div>
             </div>
         </div>
