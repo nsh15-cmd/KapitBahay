@@ -3,14 +3,38 @@
 # 🏘️ KapitBahay
 **Decentralized, Offline-First Disaster Resilience Mesh**
 
-[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-B73BFE?style=for-the-badge&logo=vite&logoColor=FFD62E)](https://vitejs.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+<!-- Core -->
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=FFD62E)](https://vitejs.dev/)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
+[![Gemini](https://img.shields.io/badge/Google_Gemini-4285F4?style=for-the-badge&logo=google-gemini&logoColor=white)](https://deepmind.google/technologies/gemini/)
+[![Ditto](https://img.shields.io/badge/Ditto_SDK-4A4AFF?style=for-the-badge)](https://www.ditto.live/)
+
+<!-- Mobile -->
 [![Capacitor](https://img.shields.io/badge/Capacitor-119EFF?style=for-the-badge&logo=capacitor&logoColor=white)](https://capacitorjs.com/)
-[![Android Studio](https://img.shields.io/badge/Android_Studio-3DDC84?style=for-the-badge&logo=android-studio&logoColor=white)](https://developer.android.com/studio)
-[![Firebase](https://img.shields.io/badge/firebase-ffca28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
-[![Gemini AI](https://img.shields.io/badge/Gemini_AI-8E75B2?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
+[![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/)
+[![Android Studio](https://img.shields.io/badge/Android_Studio-3DDC84?style=for-the-badge&logo=androidstudio&logoColor=white)](https://developer.android.com/studio)
+[![PWA](https://img.shields.io/badge/Progressive_Web_App-5A0FC8?style=for-the-badge&logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
+
+<!-- Maps -->
+[![MapLibre](https://img.shields.io/badge/MapLibre-396CB2?style=for-the-badge&logo=maplibre&logoColor=white)](https://maplibre.org/)
+[![Carto](https://img.shields.io/badge/CARTO-EB1510?style=for-the-badge&logo=carto&logoColor=white)](https://carto.com/)
+[![OSRM](https://img.shields.io/badge/OSRM-Routing-4CAF50?style=for-the-badge)](https://project-osrm.org/)
+
+<!-- Storage -->
+[![IndexedDB](https://img.shields.io/badge/IndexedDB-003B57?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)
+[![Zustand](https://img.shields.io/badge/Zustand-764ABC?style=for-the-badge)](https://zustand-demo.pmnd.rs/)
+
+<!-- Communication -->
+[![WebRTC](https://img.shields.io/badge/WebRTC-333333?style=for-the-badge&logo=webrtc&logoColor=white)](https://webrtc.org/)
+[![Bluetooth LE](https://img.shields.io/badge/Bluetooth_LE-0082FC?style=for-the-badge&logo=bluetooth&logoColor=white)](https://www.bluetooth.com/)
+[![AES-256](https://img.shields.io/badge/AES--256_GCM-Security-red?style=for-the-badge)]
+[![Web Crypto API](https://img.shields.io/badge/Web_Crypto_API-4285F4?style=for-the-badge)]
+
+<!-- UI -->
+[![Lucide](https://img.shields.io/badge/Lucide_Icons-F56565?style=for-the-badge)](https://lucide.dev/)
 
 > 🏆 **Developed for Sparkfest 2026**  
 > *Aligned with UN Sustainable Development Goals: SDG 9 (Infrastructure Resilience) & SDG 11 (Sustainable Communities).*
