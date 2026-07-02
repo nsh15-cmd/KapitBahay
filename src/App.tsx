@@ -112,11 +112,33 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Simple clean fallback handler during active authentication state lookups
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#050E1F] flex flex-col items-center justify-center text-white font-mono">
+        <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-sm tracking-widest text-slate-400">SYNCING OPERATIONAL PERMISSIONS...</p>
+      </div>
+    );
+  }
+
   return (
     <AuthContext.Provider value={{ user, role, loading }}>
       <ThemeContext.Provider value={{ theme, toggleTheme }}>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          {/* Landing page with route guard: Active sessions skip directly to their layout routes */}
+          <Route
+            path="/"
+            element={
+              user && role ? (
+                role === "admin" ? <Navigate to="/admin" replace /> :
+                  role === "lgu" ? <Navigate to="/dashboard" replace /> :
+                    <Navigate to="/map" replace />
+              ) : (
+                <LandingPage />
+              )
+            }
+          />
 
           {/* Admin Layout Tree */}
           <Route
@@ -143,7 +165,6 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            {/* 🛠️ FIXED: TriagePriority is set as the clean, primary index view */}
             <Route index element={<TriagePriority />} />
             <Route path="map" element={<PublicMap />} />
             <Route path="reports" element={<Reports />} />
@@ -176,16 +197,7 @@ interface ProtectedRouteProps {
 }
 
 function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
-  const { user, role, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#050E1F] flex flex-col items-center justify-center text-white font-mono">
-        <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-sm tracking-widest text-slate-400">SYNCING OPERATIONAL PERMISSIONS...</p>
-      </div>
-    );
-  }
+  const { user, role } = useAuth();
 
   if (!user || (allowedRole !== "any" && role !== allowedRole)) {
     return <Navigate to="/" replace />;
