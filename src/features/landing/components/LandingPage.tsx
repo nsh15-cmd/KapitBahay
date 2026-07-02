@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Moon, Sun, Menu, X, Network, ShieldAlert, WifiOff, Lock,
   Smartphone, Download, Code2, Zap, Cloud, Database, Map,
-  Radio, Globe, Layers, Bluetooth, BrainCircuit, ChevronRight, Activity
+  Radio, Globe, Layers, Bluetooth, BrainCircuit, ChevronRight, Activity, Terminal, Binary
 } from "lucide-react";
 import { useTheme } from "../../../App";
 import { AuthModal } from "./AuthModal";
@@ -211,6 +211,8 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
 
+  const gdriveUrl = "https://drive.google.com/drive/folders/1gpTg1c0DRYkEu9wJvXR5cJsWSLcUA0Pp?usp=drive_link";
+
   const openModal = (role: RoleType) => {
     setActiveModal(role);
     setMobileMenuOpen(false);
@@ -245,7 +247,6 @@ export default function LandingPage() {
               <button className="relative overflow-hidden bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold px-5 py-2.5 rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-xl active:scale-95 group" onClick={() => openModal("user")}>
                 <span className="relative z-10">Launch Portal</span>
                 <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <span className="relative z-10 group-hover:text-white transition-colors duration-300">Launch Portal</span>
               </button>
             </li>
             <li>
@@ -285,7 +286,6 @@ export default function LandingPage() {
 
       {/* Hero Section Container */}
       <section className="relative min-h-[calc(100vh-100px)] md:min-h-0 md:py-32 xl:py-40 bg-slate-50 dark:bg-[#050E1F] text-slate-900 dark:text-slate-100 px-4 sm:px-6 md:px-8 flex items-center overflow-hidden transition-colors duration-500">
-        {/* Abstract Glow Background */}
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-teal-500/20 dark:bg-teal-500/10 rounded-full blur-[120px] pointer-events-none"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-500/20 dark:bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none"></div>
 
@@ -317,12 +317,14 @@ export default function LandingPage() {
               <button className="bg-gradient-to-r from-teal-500 to-cyan-500 text-white font-black text-lg px-8 py-4 rounded-2xl transition-all shadow-[0_8px_30px_rgba(6,182,212,0.3)] hover:shadow-[0_8px_40px_rgba(6,182,212,0.4)] hover:-translate-y-1 text-center active:scale-95 flex items-center justify-center gap-2" onClick={() => openModal("user")}>
                 <Globe className="w-5 h-5" /> Launch Web App
               </button>
-              <button
-                onClick={() => alert("Android APK URL coming soon!")}
+              <a
+                href={gdriveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="bg-white dark:bg-slate-800/80 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-bold px-8 py-4 rounded-2xl transition-all border border-slate-200 dark:border-slate-700 shadow-md hover:shadow-lg hover:-translate-y-1 text-center flex items-center justify-center gap-2"
               >
-                <Smartphone className="w-5 h-5 text-slate-500 dark:text-slate-400" /> Android Native <span className="text-[10px] bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-400 px-2 py-0.5 rounded-md uppercase tracking-widest ml-1 font-black">Soon</span>
-              </button>
+                <Smartphone className="w-5 h-5 text-slate-500 dark:text-teal-400" /> Get Android App
+              </a>
             </div>
 
             {/* Fluid Hero Stats Display */}
@@ -453,13 +455,15 @@ export default function LandingPage() {
             {[
               { title: "React + TS", icon: Code2, desc: "Responsive UI components paired with strict type parameters for safe feature expansion and stable builds.", color: "text-blue-500" },
               { title: "Vite + Tailwind", icon: Zap, desc: "Lightning fast builds paired with modular styling variables for native light and dark layout rendering.", color: "text-amber-400" },
+              { title: "Android Studio", icon: Terminal, desc: "Integrated Development Environment utilized for compilation, native layer testing, and direct system debugging.", color: "text-green-500" },
+              { title: "Capacitor Android Core", icon: Smartphone, desc: "Native runtime framework mapping JavaScript events directly into hardware hooks and native modules.", color: "text-sky-500" },
+              { title: "Java / Kotlin Bridges", icon: Binary, desc: "Custom web-to-native API classes managing custom background tasks and system level services.", color: "text-purple-500" },
               { title: "Firebase Suite", icon: Cloud, desc: "Real-time cloud infrastructure pipeline for Auth and Firestore aggregating synced reports.", color: "text-orange-500" },
               { title: "IndexedDB", icon: Database, desc: "Local native client data vaults capable of queuing disaster files and loading immediately offline.", color: "text-slate-500" },
               { title: "MapLibre GL", icon: Map, desc: "Hardware accelerated vector tiles mapping canvas loading offline layers directly out of caches.", color: "text-indigo-500" },
               { title: "Ditto Mesh", icon: Radio, desc: "Decentralized P2P mesh framework managing localized data broadcast parameters over LAN.", color: "text-rose-500" },
               { title: "PWA Architecture", icon: Globe, desc: "Service Worker cache configurations making the web platform installable directly on home screens.", color: "text-teal-500" },
               { title: "WebRTC", icon: Network, desc: "Ad-hoc connection layers resolving automated synchronization passes between browser instances.", color: "text-cyan-500" },
-              { title: "Capacitor", icon: Smartphone, desc: "Cross-platform native runtime bridging our PWA code directly into an installable Android APK.", color: "text-sky-500" },
               { title: "Bluetooth LE", icon: Bluetooth, desc: "Native background BLE drivers allowing locked phones to continuously scan and share mesh data.", color: "text-blue-600" },
               { title: "Zustand", icon: Layers, desc: "Lightweight, scalable reactive state management handling complex UI/Mesh data bridging.", color: "text-amber-600" },
               { title: "Gemini AI", icon: BrainCircuit, desc: "Intelligent incident triage matrix automatically parsing text reports to assign LGU dispatch priorities.", color: "text-emerald-500" },
@@ -478,7 +482,6 @@ export default function LandingPage() {
 
           {/* NATIVE ANDROID INTEGRATION CALLOUT */}
           <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-[#0A1628] rounded-[2.5rem] p-8 sm:p-12 flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl border border-slate-700">
-            {/* Decorative background element */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
             <div className="text-center lg:text-left relative z-10 max-w-2xl">
@@ -486,22 +489,23 @@ export default function LandingPage() {
                 Hardware Access
               </div>
               <h3 className="text-3xl sm:text-4xl font-black text-white mb-4 flex items-center justify-center lg:justify-start gap-3">
-                <Smartphone className="w-8 h-8 text-teal-400" /> Native Android APK
+                <Smartphone className="w-8 h-8 text-teal-400" /> Android Native Build
               </h3>
               <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
-                By wrapping the KapitBahay PWA inside <strong>Capacitor</strong>, we unlock background Bluetooth Low Energy (BLE) services. Download the native app to keep the peer-to-peer mesh alive—even when your phone screen is locked in your pocket.
+                Compiled inside <strong>Android Studio</strong> via <strong>Capacitor</strong> integration and <strong>Gradle</strong> pipeline build rules. The native configuration hooks directly into low-level Java background tasks and Bluetooth low-energy listeners to keep data synchronization active.
               </p>
             </div>
 
-            <button
-              onClick={() => alert("APK Download URL will be live soon!")}
-              className="shrink-0 relative group flex items-center justify-center gap-3 bg-white text-slate-900 font-black px-8 py-5 rounded-2xl transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] active:scale-95 w-full lg:w-auto overflow-hidden"
+            <a
+              href={gdriveUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 relative group flex items-center justify-center gap-3 bg-white text-slate-900 font-black px-8 py-5 rounded-2xl transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] active:scale-95 w-full lg:w-auto overflow-hidden text-center"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-teal-100 to-cyan-100 opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <Download className="w-5 h-5 relative z-10" />
               <span className="relative z-10">Download APK</span>
-              <span className="relative z-10 text-[10px] bg-slate-900 text-white px-2.5 py-1 rounded-md uppercase tracking-widest ml-1 font-bold">Soon</span>
-            </button>
+            </a>
           </div>
 
         </div>
@@ -522,7 +526,6 @@ export default function LandingPage() {
           </div>
           <div className="lg:col-span-6 w-full max-w-lg mx-auto lg:max-w-none">
             <div className="relative">
-              {/* Decorative background glow for the canvas */}
               <div className="absolute inset-0 bg-gradient-to-tr from-teal-500/20 to-cyan-500/20 blur-3xl rounded-full"></div>
               <MiniMeshCanvas />
             </div>
