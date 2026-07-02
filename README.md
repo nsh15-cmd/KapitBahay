@@ -224,10 +224,10 @@ Traditional emergency management applications fail under these conditions becaus
 
 | Name | Role |
 |------|------|
-| **Renz Jericho Buday** | Lead Developer / Systems Architect |
-| **[Member Name]** | UI/UX Designer |
-| **[Member Name]** | AI & Backend Integration |
-| **[Member Name]** | Pitch & Research |
+| **Renz Jericho Buday** | Backend Developer |
+| **Nishia Pinlac** | UI/UX Designer |
+| **Princess Ara Gonzales** | Research |
+| **Lexter Anderson Daza** | Research |
 
 ---
 
