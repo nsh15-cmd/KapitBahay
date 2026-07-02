@@ -30,8 +30,8 @@
 <!-- Communication -->
 [![WebRTC](https://img.shields.io/badge/WebRTC-333333?style=for-the-badge&logo=webrtc&logoColor=white)](https://webrtc.org/)
 [![Bluetooth LE](https://img.shields.io/badge/Bluetooth_LE-0082FC?style=for-the-badge&logo=bluetooth&logoColor=white)](https://www.bluetooth.com/)
-[![AES-256](https://img.shields.io/badge/AES--256_GCM-Security-red?style=for-the-badge)]
-[![Web Crypto API](https://img.shields.io/badge/Web_Crypto_API-4285F4?style=for-the-badge)]
+![AES-256](https://img.shields.io/badge/AES--256_GCM-Security-red?style=for-the-badge)
+![Web Crypto API](https://img.shields.io/badge/Web_Crypto_API-4285F4?style=for-the-badge)
 
 <!-- UI -->
 [![Lucide](https://img.shields.io/badge/Lucide_Icons-F56565?style=for-the-badge)](https://lucide.dev/)
