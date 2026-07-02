@@ -4,7 +4,7 @@
     "type": "APK",
     "kind": "Directory"
   },
-  "applicationId": "com.kapitbahay.app",
+  "applicationId": "com.liteops.kapitbahay",
   "variantName": "release",
   "elements": [
     {

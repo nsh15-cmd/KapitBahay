@@ -164,9 +164,9 @@ export default function App() {
           <Route
             path="/dashboard"
             element={
-              <ProtectedRoute allowedRole="lgu">
+              <LguApprovalGate>
                 <DashboardLayout />
-              </ProtectedRoute>
+              </LguApprovalGate>
             }
           >
             <Route index element={<TriagePriority />} />
@@ -206,6 +206,72 @@ function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
   if (!user || (allowedRole !== "any" && role !== allowedRole)) {
     return <Navigate to="/" replace />;
   }
-  
+
   return children ? <>{children}</> : <Outlet />;
+}
+
+function LguApprovalGate({ children }: { children: React.ReactNode }) {
+  const { user, role } = useAuth();
+  const [isVerified, setIsVerified] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const verifyLguAccess = async () => {
+      if (!user || role !== "lgu") {
+        if (!cancelled) setIsVerified(false);
+        return;
+      }
+
+      try {
+        const docSnap = await getDoc(doc(db, "users", user.uid));
+        if (!cancelled) {
+          setIsVerified(docSnap.exists() && docSnap.data().verified === true);
+        }
+      } catch (error) {
+        console.error("LGU verification check failed:", error);
+        if (!cancelled) setIsVerified(false);
+      }
+    };
+
+    setIsVerified(null);
+    verifyLguAccess();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, role]);
+
+  if (!user || role !== "lgu") {
+    return <Navigate to="/" replace />;
+  }
+
+  if (isVerified === null) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-[#050E1F] flex items-center justify-center p-4">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-xl dark:border-slate-800 dark:bg-[#0D1B35]">
+          <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-teal-500 border-t-transparent animate-spin" />
+          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">Checking command access</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isVerified) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-[#050E1F] flex items-center justify-center p-4">
+        <div className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-xl dark:border-amber-500/30 dark:bg-[#0D1B35]">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+            <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a1 1 0 0 0 .86 1.5h18.64a1 1 0 0 0 .86-1.5L13.71 3.86a1 1 0 0 0-1.72 0Z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">Access Pending</h2>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">Your LGU command account is waiting for admin approval. Please wait for validation before using the dashboard.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
 }

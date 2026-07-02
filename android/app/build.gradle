@@ -4,6 +4,12 @@ apply plugin: 'com.google.gms.google-services'
 android {
     namespace = "com.liteops.kapitbahay"
     compileSdk = rootProject.ext.compileSdkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
     defaultConfig {
         applicationId "com.liteops.kapitbahay"
         minSdkVersion rootProject.ext.minSdkVersion

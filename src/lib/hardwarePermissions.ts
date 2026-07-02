@@ -10,10 +10,17 @@ export const requestMeshHardwarePermissions = async (): Promise<boolean> => {
     try {
         if (Capacitor.getPlatform() === 'android') {
             console.log("🛡️ Checking Android native permissions matrix...");
-            const status = await navigator.permissions.query({ name: 'geolocation' as any });
-            if (status.state !== 'granted') {
-                console.warn("⚠️ Location permission status weak. BLE scanning might restrict outcomes.");
+            if (navigator.permissions) {
+                const status = await navigator.permissions.query({ name: 'geolocation' as any });
+                if (status.state !== 'granted') {
+                    console.warn("⚠️ Location permission status weak. BLE scanning might restrict outcomes.");
+                }
             }
+        }
+
+        if (!Capacitor.isPluginAvailable || !Capacitor.isPluginAvailable('BluetoothLowEnergy')) {
+            console.warn('⚠️ BluetoothLowEnergy plugin unavailable during permission check.');
+            return false;
         }
 
         const response = await BluetoothLowEnergy.isEnabled();

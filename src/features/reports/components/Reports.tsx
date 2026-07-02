@@ -89,9 +89,9 @@ export default function Reports() {
             const payload = { ...selectedReport, imageDataUrl: undefined };
             const success = await broadcastReportViaBluetooth(payload);
             if (success) {
-                alert("Report successfully beamed to nearby device!");
+                alert("Bluetooth sharing started. Keep the app open while another nearby device is in range.");
             } else {
-                alert("Bluetooth transfer cancelled or failed.");
+                alert("Bluetooth transfer could not be started on this device. Please make sure Bluetooth is enabled and the app is running in a supported mobile build.");
             }
         } catch (error) {
             console.error("Bluetooth sharing error:", error);

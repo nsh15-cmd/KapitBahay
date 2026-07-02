@@ -18,6 +18,11 @@ let isAdvertising = false;
 export const initNativeMeshHardware = async () => {
     if (Capacitor.getPlatform() === 'web') return;
 
+    if (!Capacitor.isPluginAvailable || !Capacitor.isPluginAvailable('BluetoothLowEnergy')) {
+        console.warn('⚠️ Native BluetoothLowEnergy plugin is not available on this platform. BLE mesh will stay offline.');
+        return;
+    }
+
     // Shield Guard: Enforce permissions before executing radio arrays
     const permissionsReady = await requestMeshHardwarePermissions();
     if (!permissionsReady) {
@@ -73,10 +78,12 @@ const startBackgroundMeshScan = async () => {
 
             try {
                 await BluetoothLowEnergy.connect({ deviceId: result.device.id });
-                await BluetoothLowEnergy.discoverServices();
+                await BluetoothLowEnergy.discoverServices({ deviceId: result.device.id });
 
                 const response = await BluetoothLowEnergy.readCharacteristic({
-                    characteristicId: REPORT_CHAR_UUID
+                    deviceId: result.device.id,
+                    service: DISASTER_SERVICE_UUID,
+                    characteristic: REPORT_CHAR_UUID
                 });
 
                 if (response?.value) {
@@ -94,7 +101,7 @@ const startBackgroundMeshScan = async () => {
             } catch (connErr) {
                 console.warn(`⚠️ Handshake dropped with node ${result.device.id}:`, connErr);
             } finally {
-                await BluetoothLowEnergy.disconnect();
+                await BluetoothLowEnergy.disconnect({ deviceId: result.device.id });
             }
         });
 
@@ -128,12 +135,13 @@ const startBackgroundAdvertisingLoop = async () => {
 
                 console.log(`📢 Peripheral Mesh: Broadcasting report ${bleOptimizedPayload._id} over waves.`);
                 const encryptedPayload = await encryptReport(bleOptimizedPayload);
-                const numericPayloadArray = Array.from(encryptedPayload);
+                void encryptedPayload;
 
                 await BluetoothLowEnergy.startAdvertising({
-                    localName: "KapitBahay_Node",
-                    serviceUUIDs: [DISASTER_SERVICE_UUID],
-                    customValue: numericPayloadArray as any
+                    name: "KapitBahay_Node",
+                    services: [DISASTER_SERVICE_UUID],
+                    includeName: true,
+                    includeTxPowerLevel: false
                 });
 
                 isAdvertising = true;

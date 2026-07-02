@@ -129,7 +129,6 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
         await updateReportStatus(reportId, "pending", false);
 
         if (navigator.onLine) {
-            // Clean the snapshot object before pushing to cloud
             const firebaseData = sanitizeForFirestore(nextSnapshot);
             await setDoc(doc(db, "reports", reportId), {
                 ...firebaseData,
@@ -157,74 +156,9 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
         await updateReportStatus(reportId, "pending", false);
 
         if (navigator.onLine) {
-            // Clean the snapshot object before pushing to cloud
             const firebaseData = sanitizeForFirestore(nextSnapshot);
             await setDoc(doc(db, "reports", reportId), {
                 ...firebaseData,
-                lifecycleStatus: status,
-                uploadedAt: nextSnapshot.uploadedAt ?? new Date().toISOString(),
-            });
-            await updateReportStatus(reportId, "synced", true);
-        }
-    },
-    addComment: async (reportId, comment) => {
-        const nextComment: ReportComment = {
-            id: crypto.randomUUID(),
-            createdAt: Date.now(),
-            ...comment,
-        };
-
-        const existing = get().reports.find((report) => report._id === reportId);
-        if (!existing) return;
-
-        const nextComments = [...(existing.comments ?? []), nextComment];
-        const nextSnapshot = buildNextReportSnapshot(existing, { comments: nextComments });
-
-        set((state) => ({
-            reports: state.reports.map((report) => (
-                report._id === reportId
-                    ? nextSnapshot
-                    : report
-            )),
-        }));
-
-        await upsertReportDetails(reportId, {
-            comments: nextComments,
-            synced: false,
-            status: "pending",
-        });
-
-        await updateReportStatus(reportId, "pending", false);
-
-        if (navigator.onLine) {
-            await setDoc(doc(db, "reports", reportId), {
-                ...nextSnapshot,
-                comments: nextComments,
-                uploadedAt: nextSnapshot.uploadedAt ?? new Date().toISOString(),
-            });
-            await updateReportStatus(reportId, "synced", true);
-        }
-    },
-    updateLifecycleStatus: async (reportId, status) => {
-        const existing = get().reports.find((report) => report._id === reportId);
-        if (!existing) return;
-
-        const nextSnapshot = buildNextReportSnapshot(existing, {
-            lifecycleStatus: status,
-        });
-
-        set((state) => ({
-            reports: state.reports.map((report) => (
-                report._id === reportId ? nextSnapshot : report
-            )),
-        }));
-
-        await upsertReportDetails(reportId, { lifecycleStatus: status, synced: false, status: "pending" });
-        await updateReportStatus(reportId, "pending", false);
-
-        if (navigator.onLine) {
-            await setDoc(doc(db, "reports", reportId), {
-                ...nextSnapshot,
                 lifecycleStatus: status,
                 uploadedAt: nextSnapshot.uploadedAt ?? new Date().toISOString(),
             });

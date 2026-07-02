@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, browserLocalPersistence, indexedDBLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -10,6 +10,10 @@ const firebaseConfig = {
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
     appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
+
+if (typeof window !== "undefined" && window.location.protocol === "capacitor:") {
+    firebaseConfig.authDomain = "kapitbahay-33c2b.firebaseapp.com";
+}
 
 // Simple safety check to warn you in the browser console if your .env file isn't being read properly
 if (!firebaseConfig.apiKey) {

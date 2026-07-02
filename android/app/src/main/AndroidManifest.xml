@@ -45,7 +45,8 @@
                 <data
                     android:scheme="https"
                     android:host="kapitbahay-33c2b.firebaseapp.com"
-                    android:pathPrefix="/__/auth/handler" />
+                    android:pathPrefix="/__ /auth/handler" />
+                <data android:scheme="kapitbahay" android:host="auth" />
             </intent-filter>
 
         </activity>
