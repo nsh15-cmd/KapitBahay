@@ -1,7 +1,7 @@
 // C:\Users\Renz Jericho Buday\KapitBahay\src\features\map\components\PublicMap.tsx
 import { useEffect, useMemo, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { AlertTriangle, Network, HeartHandshake, Home, LifeBuoy, MapPin, Navigation, ShieldAlert, Crosshair, Tent, Plus, X, Trash2, Footprints } from "lucide-react";
+import { AlertTriangle, Network, HeartHandshake, Home, LifeBuoy, MapPin, Navigation, ShieldAlert, Crosshair, Tent, X, Trash2, Footprints } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { getCachedLocation, getPendingReports, updateReportStatus } from "../../../lib/indexedDb";
 import type { LocalReport } from "../../../lib/indexedDb";
@@ -12,6 +12,7 @@ import { useOnlineStatus } from "../../../lib/useOnlineStatus";
 import { collection, doc, onSnapshot, orderBy, query, updateDoc, arrayUnion, where, addDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { getBoundingBox, getDistanceInKm } from "../../../lib/geoUtils";
+import { syncEventEmitter } from "../../../lib/syncEngine";
 import MapGL, { Marker, Popup, NavigationControl, Source, Layer } from "react-map-gl/maplibre";
 import { useMeshPresence } from "../../../lib/useMeshPresence";
 
@@ -78,7 +79,7 @@ export default function PublicMap() {
 
   const [viewState, setViewState] = useState<Partial<ViewState>>(defaultCenter);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [cachedLocationLabel, setCachedLocationLabel] = useState<string | null>(null);
+  const [cachedLocationLabel] = useState<string | null>(null);
 
   const { theme } = useTheme();
   const { role, user } = useAuth();
@@ -166,7 +167,11 @@ export default function PublicMap() {
   const handleSetStatus = async (nextStatus: string) => {
     if (!selectedReport) return;
 
-    setSelectedReport(prev => prev ? { ...prev, lifecycleStatus: nextStatus as any } : null);
+    const patch = { lifecycleStatus: nextStatus as LocalReport["status"], status: nextStatus as LocalReport["status"] };
+
+    setSelectedReport(prev => prev ? { ...prev, ...patch } : null);
+    setLocalReports(prev => prev.map((report) => report._id === selectedReport._id ? { ...report, ...patch } : report));
+    setRemoteReports(prev => prev.map((report) => report._id === selectedReport._id ? { ...report, ...patch } : report));
 
     try {
       await updateReportStatus(selectedReport._id, nextStatus as LocalReport["status"], navigator.onLine);
@@ -177,7 +182,7 @@ export default function PublicMap() {
     if (navigator.onLine) {
       try {
         const reportRef = doc(db, "reports", selectedReport._id);
-        await updateDoc(reportRef, { lifecycleStatus: nextStatus, synced: true });
+        await updateDoc(reportRef, { lifecycleStatus: nextStatus, status: nextStatus, synced: true });
       } catch (error) {
         console.error("Error updating status in Firebase:", error);
       }
@@ -265,19 +270,35 @@ export default function PublicMap() {
     fetchRoute();
   }, [selectedReport, selectedEvacArea, currentLocation, isOnline]);
 
-  // Load Initial Data
+  // Load Initial Data and keep the map in sync with local mesh/BLE arrivals
   useEffect(() => {
+    let cancelled = false;
+
     const loadData = async () => {
       const cached = await getCachedLocation();
-      if (cached) {
-        setCurrentLocation({ lat: cached.lat, lng: cached.lng });
-        setCachedLocationLabel(cached.address ?? "Cached GPS location");
-        setViewState({ latitude: cached.lat, longitude: cached.lng, zoom: 11 });
+      if (!cancelled) {
+        if (cached) {
+          setCurrentLocation({ lat: cached.lat, lng: cached.lng });
+          setCachedLocationLabel(cached.address ?? "Cached GPS location");
+          setViewState({ latitude: cached.lat, longitude: cached.lng, zoom: 11 });
+        }
+
+        const data = await getPendingReports();
+        if (!cancelled) setLocalReports(data);
       }
-      const data = await getPendingReports();
-      setLocalReports(data);
     };
-    loadData();
+
+    const handleMeshUpdate = () => {
+      void loadData();
+    };
+
+    void loadData();
+    syncEventEmitter.addEventListener("mesh-update", handleMeshUpdate);
+
+    return () => {
+      cancelled = true;
+      syncEventEmitter.removeEventListener("mesh-update", handleMeshUpdate);
+    };
   }, []);
 
   // Fetch Evac Areas Live

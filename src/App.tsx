@@ -18,7 +18,7 @@ import Reports from "./features/reports/components/Reports";
 import TriagePriority from "./features/dashboard/components/TriagePriority";
 
 // Mesh Synchronization Engines
-import { startAutomatedSyncEngine } from "./lib/syncEngine";
+import { startAutomatedSyncEngine, syncEventEmitter } from "./lib/syncEngine";
 import { initNativeMeshHardware } from "./lib/bluetoothNative";
 import { startCloudSyncDaemon } from "./lib/cloudSync";
 
@@ -41,6 +41,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<"user" | "lgu" | "admin" | null>(null);
   const [loading, setLoading] = useState(true);
+  const [peerNotice, setPeerNotice] = useState<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
       const storedTheme = window.localStorage.getItem("theme");
@@ -77,6 +78,21 @@ export default function App() {
     };
 
     bootMeshServices().catch(err => console.error("Mesh Core Bootstrapper crashed:", err));
+  }, []);
+
+  useEffect(() => {
+    const handlePeerReceived = (event: Event) => {
+      const detail = (event as CustomEvent<{ title?: string }>).detail;
+      const title = detail?.title || "a nearby report";
+      setPeerNotice(`Peer received: ${title}`);
+      window.setTimeout(() => setPeerNotice(null), 4000);
+    };
+
+    syncEventEmitter.addEventListener("peer-received", handlePeerReceived as EventListener);
+
+    return () => {
+      syncEventEmitter.removeEventListener("peer-received", handlePeerReceived as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -129,6 +145,12 @@ export default function App() {
   return (
     <AuthContext.Provider value={{ user, role, loading }}>
       <ThemeContext.Provider value={{ theme, toggleTheme }}>
+        {peerNotice && (
+          <div className="fixed inset-x-0 top-4 z-[200] mx-auto flex w-[min(92vw,28rem)] items-center gap-3 rounded-2xl border border-teal-200 bg-teal-600/95 px-4 py-3 text-sm font-semibold text-white shadow-xl backdrop-blur">
+            <div className="h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
+            <span>{peerNotice}</span>
+          </div>
+        )}
         <Routes>
           {/* Landing page with route guard: Active sessions skip directly to their layout routes */}
           <Route
@@ -164,9 +186,11 @@ export default function App() {
           <Route
             path="/dashboard"
             element={
-              <LguApprovalGate>
-                <DashboardLayout />
-              </LguApprovalGate>
+              <ProtectedRoute allowedRole="lgu">
+                <LguApprovalGate>
+                  <DashboardLayout />
+                </LguApprovalGate>
+              </ProtectedRoute>
             }
           >
             <Route index element={<TriagePriority />} />
@@ -212,29 +236,29 @@ function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
 
 function LguApprovalGate({ children }: { children: React.ReactNode }) {
   const { user, role } = useAuth();
-  const [isVerified, setIsVerified] = useState<boolean | null>(null);
+  const [isApproved, setIsApproved] = useState<"checking" | "approved" | "pending">("checking");
 
   useEffect(() => {
     let cancelled = false;
 
     const verifyLguAccess = async () => {
       if (!user || role !== "lgu") {
-        if (!cancelled) setIsVerified(false);
+        if (!cancelled) setIsApproved("pending");
         return;
       }
 
       try {
         const docSnap = await getDoc(doc(db, "users", user.uid));
         if (!cancelled) {
-          setIsVerified(docSnap.exists() && docSnap.data().verified === true);
+          setIsApproved(docSnap.exists() && docSnap.data().verified === true ? "approved" : "pending");
         }
       } catch (error) {
         console.error("LGU verification check failed:", error);
-        if (!cancelled) setIsVerified(false);
+        if (!cancelled) setIsApproved("pending");
       }
     };
 
-    setIsVerified(null);
+    setIsApproved("checking");
     verifyLguAccess();
 
     return () => {
@@ -242,11 +266,7 @@ function LguApprovalGate({ children }: { children: React.ReactNode }) {
     };
   }, [user, role]);
 
-  if (!user || role !== "lgu") {
-    return <Navigate to="/" replace />;
-  }
-
-  if (isVerified === null) {
+  if (isApproved === "checking") {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-[#050E1F] flex items-center justify-center p-4">
         <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-xl dark:border-slate-800 dark:bg-[#0D1B35]">
@@ -257,20 +277,8 @@ function LguApprovalGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isVerified) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-[#050E1F] flex items-center justify-center p-4">
-        <div className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-xl dark:border-amber-500/30 dark:bg-[#0D1B35]">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
-            <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a1 1 0 0 0 .86 1.5h18.64a1 1 0 0 0 .86-1.5L13.71 3.86a1 1 0 0 0-1.72 0Z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">Access Pending</h2>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">Your LGU command account is waiting for admin approval. Please wait for validation before using the dashboard.</p>
-        </div>
-      </div>
-    );
+  if (isApproved === "pending") {
+    return <TriagePriority />;
   }
 
   return <>{children}</>;

@@ -39,8 +39,9 @@ interface ReportsState {
 const buildNextReportSnapshot = (report: LocalReport, patch: Partial<LocalReport>) => ({
     ...report,
     ...patch,
-    synced: false,
-    status: patch.status ?? "pending",
+    synced: patch.synced ?? false,
+    lifecycleStatus: patch.lifecycleStatus ?? report.lifecycleStatus,
+    status: patch.status ?? patch.lifecycleStatus ?? report.status ?? "pending",
 });
 
 const mergeReports = (current: LocalReport[], incoming: LocalReport[]) => {
@@ -74,8 +75,9 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     },
     startLiveStream: () => {
         const reportsQuery = query(collection(db, "reports"), orderBy("timestamp", "desc"));
-        const unsubscribe = onSnapshot(reportsQuery, (snapshot) => {
+        const unsubscribe = onSnapshot(reportsQuery, async (snapshot) => {
             const incoming = snapshot.docs.map((item) => ({ _id: item.id, ...item.data() } as LocalReport));
+            await Promise.all(incoming.map((report) => saveReportLocally(report)));
             set((state) => ({ reports: mergeReports(state.reports, incoming) }));
         });
 
@@ -152,17 +154,18 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
             )),
         }));
 
-        await upsertReportDetails(reportId, { lifecycleStatus: status, synced: false, status: "pending" });
-        await updateReportStatus(reportId, "pending", false);
+        await upsertReportDetails(reportId, { lifecycleStatus: status, synced: false, status });
+        await updateReportStatus(reportId, status, false);
 
         if (navigator.onLine) {
             const firebaseData = sanitizeForFirestore(nextSnapshot);
             await setDoc(doc(db, "reports", reportId), {
                 ...firebaseData,
                 lifecycleStatus: status,
+                status,
                 uploadedAt: nextSnapshot.uploadedAt ?? new Date().toISOString(),
             });
-            await updateReportStatus(reportId, "synced", true);
+            await updateReportStatus(reportId, status, true);
         }
     },
 }));

@@ -1,6 +1,6 @@
 // C:\Users\Renz Jericho Buday\KapitBahay\src\features\reports\components\Reports.tsx
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, FilePlus2, MessageSquare, MapPin, ShieldAlert, Clock3, Image as ImageIcon, WifiOff, Cloud, CheckCircle2, Bluetooth, Network, Loader2 } from "lucide-react";
+import { ChevronRight, FilePlus2, MessageSquare, MapPin, ShieldAlert, Clock3, WifiOff, Cloud, Network, Bluetooth, Loader2 } from "lucide-react";
 import { useAuth } from "../../../App";
 import { useReportsStore } from "../../../store/useReportsStore";
 import { broadcastReportViaBluetooth } from "../../../lib/bluetoothSharing";
@@ -91,7 +91,7 @@ export default function Reports() {
             if (success) {
                 alert("Bluetooth sharing started. Keep the app open while another nearby device is in range.");
             } else {
-                alert("Bluetooth transfer could not be started on this device. Please make sure Bluetooth is enabled and the app is running in a supported mobile build.");
+                alert("Bluetooth transfer is not available on this device right now. On Android, please allow Bluetooth, Nearby devices, and Location permissions in the app settings, then try again from a native build.");
             }
         } catch (error) {
             console.error("Bluetooth sharing error:", error);
@@ -105,7 +105,7 @@ export default function Reports() {
     const getSyncStateUI = (report: any) => {
         if (report.synced) return { label: "Cloud Synced", icon: Cloud, styles: "bg-teal-50 border-teal-200 text-teal-700 dark:bg-teal-900/20 dark:border-teal-800 dark:text-teal-400" };
         if (report.origin === "peer") return { label: "Relayed via Mesh", icon: Network, styles: "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400" };
-        return { label: "Saved Locally - Waiting for Network", icon: WifiOff, styles: "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400" };
+        return { label: "Queued Offline", icon: WifiOff, styles: "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400" };
     };
 
     return (

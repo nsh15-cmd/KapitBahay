@@ -1,4 +1,5 @@
 // C:\Users\Renz Jericho Buday\KapitBahay\src\components\layout\AdminLayout.tsx
+import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import {
   Activity,
@@ -12,7 +13,8 @@ import {
   Sun,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
-import { auth } from "../../lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
+import { auth, db } from "../../lib/firebase";
 import { useAuth, useTheme } from "../../App";
 import NetworkStatus from "../NetworkStatus";
 
@@ -20,6 +22,7 @@ export default function AdminLayout() {
   const location = useLocation();
   const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [profile, setProfile] = useState<Record<string, any> | null>(null);
 
   const navItems = [
     { name: "Monitor", path: "/admin", icon: Activity },
@@ -29,6 +32,20 @@ export default function AdminLayout() {
     { name: "Security", path: "/admin/security", icon: Lock },
   ];
 
+  useEffect(() => {
+    if (!user?.uid) {
+      setProfile(null);
+      return;
+    }
+
+    const profileRef = doc(db, "users", user.uid);
+    const unsubscribe = onSnapshot(profileRef, (snapshot) => {
+      setProfile(snapshot.exists() ? snapshot.data() : null);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -37,9 +54,12 @@ export default function AdminLayout() {
     }
   };
 
+  const profileName = profile?.displayName || [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || user?.displayName || "System Admin";
+  const profileSubtitle = profile?.orgName || profile?.jurisdiction || user?.email || "root@kapitbahay.gov.ph";
+
   const getInitials = () => {
-    if (user?.displayName) {
-      return user.displayName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+    if (profileName && profileName !== "System Admin") {
+      return profileName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
     }
     if (user?.email) {
       return user.email.slice(0, 2).toUpperCase();
@@ -89,10 +109,10 @@ export default function AdminLayout() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate text-slate-900 dark:text-white">
-                {user?.displayName || "System Admin"}
+                {profileName}
               </p>
               <p className="text-xs text-slate-500 dark:text-[#94A3B8] truncate">
-                {user?.email || "root@kapitbahay.gov.ph"}
+                {profileSubtitle}
               </p>
             </div>
           </div>

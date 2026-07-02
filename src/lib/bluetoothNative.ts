@@ -11,6 +11,32 @@ const REPORT_CHAR_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb";
 
 let isScanning = false;
 let isAdvertising = false;
+let isBleServerListenerRegistered = false;
+
+const registerBleServerListener = async () => {
+    if (isBleServerListenerRegistered) return;
+
+    await BluetoothLowEnergy.addListener('gattCharacteristicWriteRequest', async (event: any) => {
+        try {
+            const valueBytes = Array.isArray(event?.value) ? event.value : Array.from(event?.value ?? []);
+            if (!valueBytes.length) return;
+
+            const decryptedReport = await decryptReport(new Uint8Array(valueBytes));
+            if (!decryptedReport || !decryptedReport._id) return;
+
+            console.log(`📥 BLE peer report received via GATT write: ${decryptedReport._id}`);
+            await saveReportLocally({ ...decryptedReport, origin: 'peer', synced: false });
+            syncEventEmitter.dispatchEvent(new CustomEvent('peer-received', {
+                detail: { title: decryptedReport.title || 'Nearby incident', id: decryptedReport._id }
+            }));
+            syncEventEmitter.dispatchEvent(new Event('mesh-update'));
+        } catch (err) {
+            console.warn('⚠️ BLE peer ingest failed during GATT write handling:', err);
+        }
+    });
+
+    isBleServerListenerRegistered = true;
+};
 
 /**
  * Main entrance wrapper. Initializes hardware stacks and provisions background protection.
@@ -31,8 +57,8 @@ export const initNativeMeshHardware = async () => {
     }
 
     try {
-        // 1. Initialize unified stack in central/peripheral hybrid state
-        await BluetoothLowEnergy.initialize();
+        // 1. Initialize unified stack in central mode for discovery and pairing
+        await BluetoothLowEnergy.initialize({ mode: 'central' });
         console.log("🔋 Native Unified BLE Stack initialized successfully.");
 
         // 2. Provision native sticky Foreground Service helper block for Android persistence
@@ -49,6 +75,8 @@ export const initNativeMeshHardware = async () => {
                 console.warn("⚠️ Foreground service wrapper initialization bypassed:", fsErr);
             }
         }
+
+        await registerBleServerListener();
 
         // 3. Kick off background hardware tracking cycles
         startBackgroundMeshScan();
@@ -72,34 +100,37 @@ const startBackgroundMeshScan = async () => {
             if (!result?.device?.id) return;
 
             const services = result.device.services || [];
-            if (!services.includes(DISASTER_SERVICE_UUID.toLowerCase())) return;
+            if (services.length > 0 && !services.some((service: string) => service.toLowerCase() === DISASTER_SERVICE_UUID.toLowerCase())) {
+                console.log(`📡 Device ${result.device.id} did not advertise our service; still attempting a handshake.`);
+            }
 
             console.log(`📡 Node discovered: ${result.device.id}. Attempting auto-handshake.`);
 
             try {
+                const pending = await getPendingReports();
+                const localUnsynced = pending.filter(r => !r.synced && r.origin === 'local');
+                if (localUnsynced.length === 0) {
+                    console.log(`📡 No local unsynced report available to relay to ${result.device.id}.`);
+                    return;
+                }
+
                 await BluetoothLowEnergy.connect({ deviceId: result.device.id });
                 await BluetoothLowEnergy.discoverServices({ deviceId: result.device.id });
 
-                const response = await BluetoothLowEnergy.readCharacteristic({
+                const primaryReport = localUnsynced[0];
+                const bleOptimizedPayload = { ...primaryReport, imageDataUrl: undefined };
+                const encryptedPayload = await encryptReport(bleOptimizedPayload);
+                await BluetoothLowEnergy.writeCharacteristic({
                     deviceId: result.device.id,
                     service: DISASTER_SERVICE_UUID,
-                    characteristic: REPORT_CHAR_UUID
+                    characteristic: REPORT_CHAR_UUID,
+                    value: Array.from(encryptedPayload),
+                    type: 'withResponse'
                 });
 
-                if (response?.value) {
-                    const encryptedArray = new Uint8Array(response.value);
-                    const decryptedReport = await decryptReport(encryptedArray);
-
-                    if (decryptedReport && decryptedReport._id) {
-                        console.log(`📥 Ingested peer report via background BLE: ${decryptedReport._id}`);
-                        await saveReportLocally({ ...decryptedReport, origin: 'peer', synced: false });
-
-                        // Broadcast update to syncEngine.ts to fire database propagation
-                        syncEventEmitter.dispatchEvent(new Event('mesh-update'));
-                    }
-                }
+                console.log(`📤 Relayed peer report via BLE write to ${result.device.id}: ${primaryReport._id}`);
             } catch (connErr) {
-                console.warn(`⚠️ Handshake dropped with node ${result.device.id}:`, connErr);
+                console.warn(`⚠️ BLE relay dropped with node ${result.device.id}:`, connErr);
             } finally {
                 await BluetoothLowEnergy.disconnect({ deviceId: result.device.id });
             }
@@ -126,8 +157,6 @@ const startBackgroundAdvertisingLoop = async () => {
                 if (isAdvertising) return;
 
                 const primaryReport = localUnsynced[0];
-
-                // CRITICAL PATCH: Strip heavy payload elements before transmission over BLE radio vectors
                 const bleOptimizedPayload = {
                     ...primaryReport,
                     imageDataUrl: undefined
@@ -135,8 +164,30 @@ const startBackgroundAdvertisingLoop = async () => {
 
                 console.log(`📢 Peripheral Mesh: Broadcasting report ${bleOptimizedPayload._id} over waves.`);
                 const encryptedPayload = await encryptReport(bleOptimizedPayload);
-                void encryptedPayload;
 
+                await BluetoothLowEnergy.initialize({ mode: 'peripheral' });
+                await BluetoothLowEnergy.addGattService({
+                    service: DISASTER_SERVICE_UUID,
+                    characteristics: [{
+                        uuid: REPORT_CHAR_UUID,
+                        properties: {
+                            read: true,
+                            notify: true,
+                            write: true,
+                            writeWithoutResponse: false,
+                            broadcast: false,
+                            indicate: false,
+                            authenticatedSignedWrites: false,
+                            extendedProperties: false,
+                        },
+                        value: Array.from(encryptedPayload)
+                    }]
+                });
+                await BluetoothLowEnergy.setGattCharacteristicValue({
+                    service: DISASTER_SERVICE_UUID,
+                    characteristic: REPORT_CHAR_UUID,
+                    value: Array.from(encryptedPayload)
+                });
                 await BluetoothLowEnergy.startAdvertising({
                     name: "KapitBahay_Node",
                     services: [DISASTER_SERVICE_UUID],
@@ -145,6 +196,10 @@ const startBackgroundAdvertisingLoop = async () => {
                 });
 
                 isAdvertising = true;
+                await new Promise(resolve => setTimeout(resolve, 4000));
+                await BluetoothLowEnergy.stopAdvertising();
+                await BluetoothLowEnergy.initialize({ mode: 'central' });
+                isAdvertising = false;
             } else {
                 if (!isAdvertising) return;
                 console.log("🛑 Peripheral Mesh: All local items verified synced. Sleeping native transmitters.");
@@ -153,6 +208,7 @@ const startBackgroundAdvertisingLoop = async () => {
             }
         } catch (err) {
             console.error("🚨 Error in background peripheral advertising loop:", err);
+            isAdvertising = false;
         }
     }, 15000);
 };

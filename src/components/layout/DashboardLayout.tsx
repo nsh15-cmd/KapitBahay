@@ -1,5 +1,5 @@
 // C:\Users\Renz Jericho Buday\KapitBahay\src\components\layout\DashboardLayout.tsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import {
   Map as MapIcon,
@@ -14,13 +14,16 @@ import {
   BrainCircuit
 } from "lucide-react";
 import { signOut } from "firebase/auth";
-import { auth } from "../../lib/firebase";
-import { useTheme } from "../../App";
+import { doc, onSnapshot } from "firebase/firestore";
+import { auth, db } from "../../lib/firebase";
+import { useAuth, useTheme } from "../../App";
 
 export default function DashboardLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [profile, setProfile] = useState<Record<string, any> | null>(null);
 
   const navItems = [
     { name: "Triage Matrix", path: "/dashboard", icon: BrainCircuit },
@@ -29,6 +32,20 @@ export default function DashboardLayout() {
     { name: "System Settings", path: "/dashboard/settings", icon: Settings },
   ];
 
+  useEffect(() => {
+    if (!user?.uid) {
+      setProfile(null);
+      return;
+    }
+
+    const profileRef = doc(db, "users", user.uid);
+    const unsubscribe = onSnapshot(profileRef, (snapshot) => {
+      setProfile(snapshot.exists() ? snapshot.data() : null);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -36,6 +53,9 @@ export default function DashboardLayout() {
       console.error("Error signing out LGU:", error);
     }
   };
+
+  const profileName = profile?.displayName || [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || user?.displayName || "DRRMO Desk";
+  const profileSubtitle = profile?.orgName || profile?.contactPerson || user?.email || "Dispatch operations";
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -79,14 +99,14 @@ export default function DashboardLayout() {
         <div className="p-4 border-t border-slate-200 dark:border-[#1E293B]">
           <div className="flex items-center gap-3 px-4 py-2">
             <div className="w-8 h-8 rounded-full bg-[#F59E0B] flex items-center justify-center font-bold text-[#0a0600]">
-              DR
+              {profileName.split(" ").map((segment: string) => segment[0]).join("").slice(0, 2).toUpperCase() || "LG"}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate text-slate-900 dark:text-white">
-                DRRMO Head
+                {profileName}
               </p>
               <p className="text-xs text-slate-500 dark:text-[#94A3B8] truncate">
-                drrmo@malabon.gov.ph
+                {profileSubtitle}
               </p>
             </div>
           </div>

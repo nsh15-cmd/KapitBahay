@@ -1,8 +1,10 @@
 // C:\Users\Renz Jericho Buday\KapitBahay\src\components\layout\CitizenLayout.tsx
+import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { ClipboardList, Map, LogOut, ShieldAlert, Moon, Sun } from "lucide-react";
 import { signOut } from "firebase/auth";
-import { auth } from "../../lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
+import { auth, db } from "../../lib/firebase";
 import { useAuth, useTheme } from "../../App";
 import NetworkStatus from "../NetworkStatus";
 
@@ -10,11 +12,26 @@ export default function CitizenLayout() {
     const location = useLocation();
     const { user } = useAuth();
     const { theme, toggleTheme } = useTheme();
+    const [profile, setProfile] = useState<Record<string, any> | null>(null);
 
     const navItems = [
         { name: "Reports", path: "/reports", icon: ClipboardList },
         { name: "Mesh Map", path: "/map", icon: Map },
     ];
+
+    useEffect(() => {
+        if (!user?.uid) {
+            setProfile(null);
+            return;
+        }
+
+        const profileRef = doc(db, "users", user.uid);
+        const unsubscribe = onSnapshot(profileRef, (snapshot) => {
+            setProfile(snapshot.exists() ? snapshot.data() : null);
+        });
+
+        return () => unsubscribe();
+    }, [user?.uid]);
 
     const handleLogout = async () => {
         try {
@@ -24,9 +41,15 @@ export default function CitizenLayout() {
         }
     };
 
+    const profileName = profile?.displayName || [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || user?.displayName || "Resident Citizen";
+    const profileSubtitle = profile?.orgName || profile?.jurisdiction || user?.email || "Citizen account";
+
     const getInitials = () => {
-        if (user?.displayName) {
-            return user.displayName.split(" ").map(n => n[0]).join("").toUpperCase();
+        if (profileName && profileName !== "Resident Citizen") {
+            return profileName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+        }
+        if (user?.email) {
+            return user.email.slice(0, 2).toUpperCase();
         }
         return "CR";
     };
@@ -73,9 +96,9 @@ export default function CitizenLayout() {
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold truncate text-slate-900 dark:text-white">
-                                {user?.displayName || "Resident Citizen"}
+                                {profileName}
                             </p>
-                            <p className="text-xs text-slate-500 dark:text-[#94A3B8] truncate">{user?.email}</p>
+                            <p className="text-xs text-slate-500 dark:text-[#94A3B8] truncate">{profileSubtitle}</p>
                         </div>
                     </div>
                     <button

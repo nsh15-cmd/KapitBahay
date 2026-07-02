@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, where } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, where, orderBy } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import {
   Activity,
   Network,
   ShieldCheck,
-  ServerCrash,
   Database,
+  AlertTriangle,
 } from "lucide-react";
 
 interface PendingLgu {
@@ -17,26 +17,34 @@ interface PendingLgu {
   createdAt?: string;
 }
 
+interface AdminEvent {
+  id: string;
+  title: string;
+  detail: string;
+  tone: "sync" | "auth" | "alert";
+  timestamp: string;
+}
+
 export default function AdminDashboard() {
   const [pendingLgus, setPendingLgus] = useState<PendingLgu[]>([]);
-  const [totalLgusCount, setTotalLgusCount] = useState(0);
+  const [verifiedLguCount, setVerifiedLguCount] = useState(0);
+  const [activeReportCount, setActiveReportCount] = useState(0);
+  const [syncedReportCount, setSyncedReportCount] = useState(0);
+  const [events, setEvents] = useState<AdminEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Synchronize dynamic counts and active queue lists from the database live
   useEffect(() => {
-    // 1. Fetch only unverified LGUs for the verification stack queue list
     const pendingQuery = query(collection(db, "users"), where("role", "==", "lgu"), where("verified", "==", false));
     const unsubscribePending = onSnapshot(pendingQuery, (snapshot) => {
-      const lgus: PendingLgu[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        lgus.push({
-          id: doc.id,
+      const lgus: PendingLgu[] = snapshot.docs.map((item) => {
+        const data = item.data();
+        return {
+          id: item.id,
           orgName: data.orgName || "Unnamed LGU Hub",
           contactPerson: data.contactPerson || "No Contact Person Listed",
-          email: data.email,
-          createdAt: data.createdAt
-        });
+          email: data.email || "No email provided",
+          createdAt: data.createdAt,
+        };
       });
       setPendingLgus(lgus);
       setIsLoading(false);
@@ -44,15 +52,44 @@ export default function AdminDashboard() {
       console.error("Error reading pending database loops:", error);
     });
 
-    // 2. Stream aggregate totals of verified nodes across system operations
-    const totalQuery = query(collection(db, "users"), where("role", "==", "lgu"), where("verified", "==", true));
-    const unsubscribeTotal = onSnapshot(totalQuery, (snapshot) => {
-      setTotalLgusCount(snapshot.size);
+    const verifiedQuery = query(collection(db, "users"), where("role", "==", "lgu"), where("verified", "==", true));
+    const unsubscribeVerified = onSnapshot(verifiedQuery, (snapshot) => {
+      setVerifiedLguCount(snapshot.size);
+    });
+
+    const reportsQuery = query(collection(db, "reports"), orderBy("timestamp", "desc"));
+    const unsubscribeReports = onSnapshot(reportsQuery, (snapshot) => {
+      const reportDocs = snapshot.docs;
+      const activeReports = reportDocs.filter((item) => {
+        const status = item.data().status;
+        return status !== "resolved" && status !== "verified";
+      });
+      const syncedReports = reportDocs.filter((item) => item.data().synced === true);
+
+      const recentEvents: AdminEvent[] = reportDocs.slice(0, 6).map((item) => {
+        const data = item.data();
+        const status = data.status || "pending";
+        const tone = status === "resolved" ? "sync" : status === "verified" ? "auth" : "alert";
+        return {
+          id: item.id,
+          title: `${data.type || "report"} ${status}`,
+          detail: data.description || "No description logged",
+          tone,
+          timestamp: data.timestamp || data.createdAt || Date.now(),
+        };
+      });
+
+      setActiveReportCount(activeReports.length);
+      setSyncedReportCount(syncedReports.length);
+      setEvents(recentEvents);
+    }, (error) => {
+      console.error("Error reading report telemetry:", error);
     });
 
     return () => {
       unsubscribePending();
-      unsubscribeTotal();
+      unsubscribeVerified();
+      unsubscribeReports();
     };
   }, []);
 
@@ -76,16 +113,23 @@ export default function AdminDashboard() {
     }
   };
 
+  const formatTime = (value: string | number) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "just now";
+    }
+    return date.toLocaleString();
+  };
+
   return (
     <div className="p-4 sm:p-8 h-full flex flex-col">
-      {/* Header */}
       <header className="flex justify-between items-center mb-8 pb-4 border-b border-red-900/30">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
             System <span className="text-red-500">Monitor</span>
           </h1>
           <p className="text-[#94A3B8] text-sm font-medium mt-1">
-            Platform-wide Mesh Health & Telemetry
+            Live telemetry from reports, LGU approvals, and sync activity
           </p>
         </div>
         <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
@@ -94,17 +138,16 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      {/* Top Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-white dark:bg-[#0D1B35] border border-slate-200 dark:border-[#1E293B] p-6 rounded-2xl">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[#94A3B8] text-xs font-bold uppercase tracking-wider">
-              Active Mesh Nodes
+              Active Reports
             </p>
             <Network className="w-5 h-5 text-teal-400" />
           </div>
-          <p className="text-3xl font-black text-slate-900 dark:text-white">1,247</p>
-          <p className="text-xs text-teal-400 mt-2">↑ 14% from last hour</p>
+          <p className="text-3xl font-black text-slate-900 dark:text-white">{activeReportCount}</p>
+          <p className="text-xs text-teal-400 mt-2">Current incident queue</p>
         </div>
 
         <div className="bg-white dark:bg-[#0D1B35] border border-slate-200 dark:border-[#1E293B] p-6 rounded-2xl">
@@ -114,37 +157,34 @@ export default function AdminDashboard() {
             </p>
             <ShieldCheck className="w-5 h-5 text-amber-500" />
           </div>
-          <p className="text-3xl font-black text-slate-900 dark:text-white">{totalLgusCount}</p>
+          <p className="text-3xl font-black text-slate-900 dark:text-white">{verifiedLguCount}</p>
           <p className="text-xs text-[#94A3B8] mt-2">{pendingLgus.length} pending approval</p>
         </div>
 
         <div className="bg-white dark:bg-[#0D1B35] border border-red-900/50 p-6 rounded-2xl">
           <div className="flex items-center justify-between mb-2">
             <p className="text-red-400 text-xs font-bold uppercase tracking-wider">
-              Offline Clusters
+              Pending Approvals
             </p>
-            <ServerCrash className="w-5 h-5 text-red-500" />
+            <AlertTriangle className="w-5 h-5 text-red-500" />
           </div>
-          <p className="text-3xl font-black text-slate-900 dark:text-white">8</p>
-          <p className="text-xs text-red-400 mt-2">Awaiting cloud sync</p>
+          <p className="text-3xl font-black text-slate-900 dark:text-white">{pendingLgus.length}</p>
+          <p className="text-xs text-red-400 mt-2">Needs admin review</p>
         </div>
 
         <div className="bg-white dark:bg-[#0D1B35] border border-slate-200 dark:border-[#1E293B] p-6 rounded-2xl">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[#94A3B8] text-xs font-bold uppercase tracking-wider">
-              Total Reports Synced
+              Reports Synced
             </p>
             <Database className="w-5 h-5 text-indigo-400" />
           </div>
-          <p className="text-3xl font-black text-slate-900 dark:text-white">8,902</p>
-          <p className="text-xs text-indigo-400 mt-2">
-            Zero conflict resolutions
-          </p>
+          <p className="text-3xl font-black text-slate-900 dark:text-white">{syncedReportCount}</p>
+          <p className="text-xs text-indigo-400 mt-2">Cloud-backed operations</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1">
-        {/* LGU Approval Queue */}
         <div className="bg-white dark:bg-[#0D1B35] border border-slate-200 dark:border-[#1E293B] rounded-2xl p-6 flex flex-col min-h-[340px]">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
             Pending LGU Approvals
@@ -194,36 +234,25 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* System Event Log */}
         <div className="bg-[#0D1B35] border border-slate-200 dark:border-[#1E293B] rounded-2xl p-6 flex flex-col">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
             Real-time Event Log
           </h2>
-          <div className="flex-1 bg-slate-50 dark:bg-[#050E1F]border border-slate-200 dark:border-[#1E293B] rounded-xl p-4 font-mono text-xs text-[#94A3B8] overflow-y-auto space-y-2 max-h-[400px]">
-            <p>
-              <span className="text-teal-400">[SYNC]</span> 14:02:44 - Cluster A
-              (Malabon) merged 12 offline reports.
-            </p>
-            <p>
-              <span className="text-teal-400">[SYNC]</span> 14:02:10 - Cluster B
-              (Navotas) merged 4 offline reports.
-            </p>
-            <p>
-              <span className="text-amber-400">[WARN]</span> 14:01:05 - High
-              latency detected on Mesh Node #8892.
-            </p>
-            <p>
-              <span className="text-indigo-400">[AUTH]</span> 14:00:22 - LGU
-              Session started: drrmo@malabon.gov.ph
-            </p>
-            <p>
-              <span className="text-red-400">[ERR]</span> 13:58:11 - Sync failed
-              for Node #1102: Invalid AES signature.
-            </p>
-            <p>
-              <span className="text-teal-400">[SYNC]</span> 13:55:00 - Master
-              database backup completed.
-            </p>
+          <div className="flex-1 bg-slate-50 dark:bg-[#050E1F] border border-slate-200 dark:border-[#1E293B] rounded-xl p-4 font-mono text-xs text-[#94A3B8] overflow-y-auto space-y-2 max-h-[400px]">
+            {events.length === 0 ? (
+              <p className="text-slate-500">No activity yet.</p>
+            ) : events.map((event) => (
+              <div key={event.id} className="rounded-lg border border-slate-200 dark:border-[#1E293B] bg-white/60 dark:bg-[#0D1B35]/70 p-3">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className={`font-bold ${event.tone === "alert" ? "text-red-400" : event.tone === "auth" ? "text-amber-400" : "text-teal-400"}`}>
+                    [{event.tone.toUpperCase()}]
+                  </span>
+                  <span className="text-[10px] text-slate-500">{formatTime(event.timestamp)}</span>
+                </div>
+                <p className="font-semibold text-slate-900 dark:text-white">{event.title}</p>
+                <p className="text-slate-500 mt-1">{event.detail}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>

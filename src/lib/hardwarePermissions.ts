@@ -8,18 +8,23 @@ export const requestMeshHardwarePermissions = async (): Promise<boolean> => {
     }
 
     try {
+        if (!Capacitor.isPluginAvailable || !Capacitor.isPluginAvailable('BluetoothLowEnergy')) {
+            console.warn('⚠️ BluetoothLowEnergy plugin unavailable during permission check.');
+            return false;
+        }
+
         if (Capacitor.getPlatform() === 'android') {
             console.log("🛡️ Checking Android native permissions matrix...");
-            if (navigator.permissions) {
-                const status = await navigator.permissions.query({ name: 'geolocation' as any });
-                if (status.state !== 'granted') {
-                    console.warn("⚠️ Location permission status weak. BLE scanning might restrict outcomes.");
-                }
+            const permissionStatus = await BluetoothLowEnergy.requestPermissions();
+            if (!permissionStatus.bluetooth || !permissionStatus.location) {
+                console.warn("⚠️ BLE permissions were not fully granted.");
+                return false;
             }
         }
 
-        if (!Capacitor.isPluginAvailable || !Capacitor.isPluginAvailable('BluetoothLowEnergy')) {
-            console.warn('⚠️ BluetoothLowEnergy plugin unavailable during permission check.');
+        const availability = await BluetoothLowEnergy.isAvailable();
+        if (!availability.available) {
+            console.warn("📻 Hardware Alert: Bluetooth hardware is unavailable on this device.");
             return false;
         }
 

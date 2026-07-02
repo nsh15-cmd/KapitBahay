@@ -1,111 +1,175 @@
 // C:\Users\Renz Jericho Buday\KapitBahay\src\features\dashboard\components\TriagePriority.tsx
 import { useEffect, useMemo, useState } from "react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { signOut } from "firebase/auth";
+import { doc, getDoc, updateDoc } from "firebase/firestore"; // Added updateDoc
 import {
-    AlertTriangle, ShieldAlert, HeartHandshake, LifeBuoy, Home,
-    Clock, CheckCircle, Flame, AlertCircle, Sparkles, Brain,
-    MapPin, Shield, CheckCircle2, User, ChevronRight, Truck, Loader2
+    AlertTriangle, ShieldAlert, Flame, Sparkles, Brain,
+    MapPin, Shield, Truck, Loader2, LogOut
 } from "lucide-react";
 import { useReportsStore } from "../../../store/useReportsStore";
 import type { LocalReport, ReportLifecycleStatus } from "../../../lib/indexedDb";
+import { auth, db } from "../../../lib/firebase";
+import { useAuth } from "../../../App";
 
 type TriageTier = "CRITICAL_ACTION" | "HIGH_ATTENTION" | "ROUTINE_LOG";
 
-interface TriageAnalysis {
-    score: number;        // Explicit 1-100 severity calculation
-    tier: TriageTier;     // Visual action pipeline column
-    impactAnalysis: string; // Brief impact summary
-    recommendedUnit: string; // Recommended dispatch asset (e.g. Medical, Fire, Logistics, Engineering)
+export interface TriageAnalysis {
+    score: number;
+    tier: TriageTier;
+    impactAnalysis: string;
+    recommendedUnit: string;
 }
+
+// Extend your LocalReport type locally to include the new DB field
+type ReportWithAI = LocalReport & { aiTriage?: TriageAnalysis };
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 export default function TriagePriority() {
     const { reports, hydrateReports, startLiveStream, updateLifecycleStatus } = useReportsStore();
+    const { user, role } = useAuth();
+
     const [aiAssessments, setAiAssessments] = useState<Record<string, TriageAnalysis>>({});
     const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
+    const [approvalStatus, setApprovalStatus] = useState<"checking" | "approved" | "pending">("checking");
 
+    // LGU Authorization Check
     useEffect(() => {
+        let cancelled = false;
+
+        const verifyLguAccess = async () => {
+            if (!user || role !== "lgu") {
+                if (!cancelled) setApprovalStatus("pending");
+                return;
+            }
+
+            try {
+                const docSnap = await getDoc(doc(db, "users", user.uid));
+                if (!cancelled) {
+                    setApprovalStatus(docSnap.exists() && docSnap.data().verified === true ? "approved" : "pending");
+                }
+            } catch (error) {
+                console.error("LGU approval check failed:", error);
+                if (!cancelled) setApprovalStatus("pending");
+            }
+        };
+
+        setApprovalStatus("checking");
+        verifyLguAccess();
+
         hydrateReports();
         const unsubscribe = startLiveStream();
-        return () => unsubscribe();
-    }, [hydrateReports, startLiveStream]);
 
-    // Fail-safe programmatic matrix for offline LGU state or fallback processing
-    const getHeuristicTriage = (report: LocalReport): TriageAnalysis => {
-        if (report.category === "rescue") {
-            return { score: 95, tier: "CRITICAL_ACTION", impactAnalysis: "Immediate life safety threat detected.", recommendedUnit: "Ambulance / Search & Rescue" };
-        }
-        if (report.category === "hazard") {
-            return { score: 75, tier: "HIGH_ATTENTION", impactAnalysis: "Environmental hazard requires active isolation.", recommendedUnit: "BFP / Fire Team" };
-        }
-        return { score: 35, tier: "ROUTINE_LOG", impactAnalysis: "Standard infrastructure log item.", recommendedUnit: "Logistics / Engineering" };
+        return () => {
+            cancelled = true;
+            unsubscribe();
+        };
+    }, [hydrateReports, startLiveStream, user, role]);
+
+    // Fail-safe heuristic logic
+    const getFallbackTriage = (report: LocalReport, reason: string): TriageAnalysis => {
+        const base = report.category === "rescue"
+            ? { score: 95, tier: "CRITICAL_ACTION" as const, recommendedUnit: "Ambulance / Search & Rescue" }
+            : report.category === "hazard"
+                ? { score: 75, tier: "HIGH_ATTENTION" as const, recommendedUnit: "BFP / Fire Team" }
+                : { score: 35, tier: "ROUTINE_LOG" as const, recommendedUnit: "Logistics / Engineering" };
+
+        return {
+            ...base,
+            impactAnalysis: report.synced
+                ? `Cloud-backed assessment ready. ${reason}`
+                : `Queued offline for dispatch review. ${reason}`,
+        };
     };
 
-    // The true AI evaluation engine running against report context details
-    const executeAITriage = async (report: LocalReport) => {
-        if (!GEMINI_API_KEY) {
-            setAiAssessments(prev => ({ ...prev, [report._id]: getHeuristicTriage(report) }));
-            return;
-        }
-
-        setActiveAnalysisId(report._id);
-        try {
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-lite" });
-            const prompt = `
-        You are an advanced emergency disaster triage dispatch director evaluating community intelligence reports.
-        Analyze this report to establish response priority based on immediate threats to human life, entrapment, medical status, or cascading infrastructure failure.
-        
-        Incident Category: ${report.category}
-        Incident Title: ${report.title}
-        Description Details: ${report.description || "No description given."}
-        Attached Reference Location: ${report.locationText || "GPS Coordinates Pinpointed"}
-        
-        Respond ONLY with a single minified JSON object matching this schema precisely:
-        {"score":number,"tier":"CRITICAL_ACTION"|"HIGH_ATTENTION"|"ROUTINE_LOG","impactAnalysis":"1-sentence field impact statement","recommendedUnit":"Specific Emergency Unit Name"}
-      `;
-
-            const result = await model.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
-            const responseText = result.response.text?.() || "{}";
-
-            const jsonStart = responseText.indexOf("{");
-            const jsonEnd = responseText.lastIndexOf("}") + 1;
-            const cleanJson = responseText.substring(jsonStart, jsonEnd);
-
-            const analysis = JSON.parse(cleanJson) as TriageAnalysis;
-            setAiAssessments(prev => ({ ...prev, [report._id]: analysis }));
-        } catch (err) {
-            console.error("AI Context evaluation engine dropped script parsing:", err);
-            setAiAssessments(prev => ({ ...prev, [report._id]: getHeuristicTriage(report) }));
-        } finally {
-            setActiveAnalysisId(null);
-        }
-    };
-
-    // Continuous background evaluator check loop hook
+    // Continuous AI processing queue
     useEffect(() => {
-        const nextInQueue = reports.find(r => !aiAssessments[r._id]);
+        const executeAITriage = async (report: ReportWithAI) => {
+            // 🛑 STOP: If the DB already has the AI Triage, skip generating a new one!
+            if (report.aiTriage) return;
+
+            if (!GEMINI_API_KEY) {
+                console.warn(`[DEBUG - AI Triage] ⚠️ No API key found. Using fallback for ID: ${report._id}`);
+                setAiAssessments(prev => ({ ...prev, [report._id]: getFallbackTriage(report, "AI triage is unavailable, so the report is using the offline dispatch fallback.") }));
+                return;
+            }
+
+            setActiveAnalysisId(report._id);
+            console.log(`[DEBUG - AI Triage] 🤖 Starting AI evaluation for report ID: ${report._id} ("${report.title}")`);
+
+            try {
+                const model = genAI.getGenerativeModel({
+                    model: "gemini-3.1-flash-lite",
+                    generationConfig: { responseMimeType: "application/json" }
+                });
+
+                const prompt = `
+                    You are an advanced emergency disaster triage dispatch director evaluating community intelligence reports.
+                    Analyze this report to establish response priority based on immediate threats to human life, entrapment, medical status, or cascading infrastructure failure.
+                    
+                    Incident Category: ${report.category}
+                    Incident Title: ${report.title}
+                    Description Details: ${report.description || "No description given."}
+                    Attached Reference Location: ${report.locationText || "GPS Coordinates Pinpointed"}
+                    
+                    Respond strictly with a JSON object using this schema:
+                    {"score": <number 1-100>, "tier": "CRITICAL_ACTION" | "HIGH_ATTENTION" | "ROUTINE_LOG", "impactAnalysis": "<1-sentence impact statement>", "recommendedUnit": "<Specific Emergency Unit Name>"}
+                `;
+
+                console.log(`[DEBUG - AI Triage] 📡 Sending prompt to Gemini...`);
+                const result = await model.generateContent(prompt);
+                const responseText = result.response.text();
+
+                const analysis = JSON.parse(responseText) as TriageAnalysis;
+                console.log(`[DEBUG - AI Triage] ✅ Successfully parsed AI analysis:`, analysis);
+
+                // 1. Update the UI state immediately
+                setAiAssessments(prev => ({ ...prev, [report._id]: analysis }));
+
+                // 2. Save the AI result to Firebase so we NEVER have to run AI for this report again
+                if (report.synced) {
+                    try {
+                        await updateDoc(doc(db, "reports", report._id), { aiTriage: analysis });
+                        console.log(`[DEBUG - AI Triage] 💾 Permanently saved AI Data to Database for ID: ${report._id}`);
+                    } catch (dbErr) {
+                        console.error(`[DEBUG - AI Triage] ⚠️ DB save failed, but UI is updated:`, dbErr);
+                    }
+                }
+
+            } catch (err) {
+                console.error(`[DEBUG - AI Triage] ❌ AI evaluation failed for ID ${report._id}:`, err);
+                setAiAssessments(prev => ({ ...prev, [report._id]: getFallbackTriage(report, "The AI model failed, so the report remains queued for manual dispatch review.") }));
+            } finally {
+                setActiveAnalysisId(null);
+            }
+        };
+
+        // Find the next report that DOES NOT have DB data (r.aiTriage) and DOES NOT have local state data
+        const nextInQueue = (reports as ReportWithAI[]).find(
+            r => !r.aiTriage && !aiAssessments[r._id] && r.lifecycleStatus !== "resolved" && r.lifecycleStatus !== "false_report"
+        );
+
         if (nextInQueue && !activeAnalysisId) {
+            console.log(`[DEBUG - AI Triage] 🚨 New offline report detected. Handing to AI: ID ${nextInQueue._id}`);
             executeAITriage(nextInQueue);
         }
     }, [reports, aiAssessments, activeAnalysisId]);
 
-    // Combine database logs with contextual AI matrices values
+    // Matrix structuring
     const structuredTriageData = useMemo(() => {
-        return reports.map(r => ({
-            ...r,
-            triage: aiAssessments[r._id] || {
-                score: r.category === "rescue" ? 90 : r.category === "hazard" ? 70 : 30,
-                tier: r.category === "rescue" ? "CRITICAL_ACTION" as const : r.category === "hazard" ? "HIGH_ATTENTION" as const : "ROUTINE_LOG" as const,
-                impactAnalysis: "Processing intelligence context...",
-                recommendedUnit: "Analyzing..."
-            }
-        })).filter(r => r.lifecycleStatus !== "resolved" && r.lifecycleStatus !== "false_report");
+        return (reports as ReportWithAI[])
+            .filter(r => r.lifecycleStatus !== "resolved" && r.lifecycleStatus !== "false_report")
+            .map(r => ({
+                ...r,
+                // UI Priority Order: 1. Data from Database -> 2. Data from active AI run -> 3. Fallback logic
+                triage: r.aiTriage || aiAssessments[r._id] || getFallbackTriage(r, "The report is still waiting for its first triage evaluation.")
+            }));
     }, [reports, aiAssessments]);
 
-    // Split into actionable triage boards
+    // Column splitting
     const columns = useMemo(() => {
         return {
             CRITICAL_ACTION: structuredTriageData.filter(r => r.triage.tier === "CRITICAL_ACTION"),
@@ -114,12 +178,52 @@ export default function TriagePriority() {
         };
     }, [structuredTriageData]);
 
-    // LGU Full Authority Action Handler
     const handleSetStatus = async (reportId: string, status: ReportLifecycleStatus) => {
         setUpdatingId(reportId);
         await updateLifecycleStatus(reportId, status);
         setUpdatingId(null);
     };
+
+    const handleExit = async () => {
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Could not sign out LGU user:", error);
+        }
+    };
+
+    if (approvalStatus === "checking") {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#050E1F] p-4">
+                <div className="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-6 text-center shadow-xl dark:border-slate-800 dark:bg-[#0D1B35]">
+                    <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-teal-500 border-t-transparent animate-spin" />
+                    <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">Checking command access</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (approvalStatus === "pending") {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#050E1F] p-4">
+                <div className="w-full max-w-md rounded-[2rem] border border-amber-200 bg-white p-6 text-center shadow-xl dark:border-amber-500/30 dark:bg-[#0D1B35]">
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+                        <ShieldAlert className="h-8 w-8" />
+                    </div>
+                    <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">Access Pending</h2>
+                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">Your LGU command account is waiting for admin approval. You can stay here until approval is granted, or exit for now.</p>
+                    <button
+                        type="button"
+                        onClick={handleExit}
+                        className="mt-5 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 dark:border-slate-700 dark:bg-slate-800"
+                    >
+                        <LogOut className="h-4 w-4" />
+                        Exit
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 font-sans">
