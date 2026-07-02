@@ -1,4 +1,4 @@
-package com.kapitbahay.app;
+package com.liteops.kapitbahay;
 
 import com.getcapacitor.BridgeActivity;
 

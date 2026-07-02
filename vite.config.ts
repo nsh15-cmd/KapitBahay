@@ -8,7 +8,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       // Include any static assets from your public folder here
-      includeAssets: ['favicon.svg', 'icons.svg'],
+      includeAssets: ['kapitbahaylogo.png', 'kapitbahaylogo.png'],
       manifest: {
         name: 'KapitBahay Command Node',
         short_name: 'KapitBahay',
@@ -19,9 +19,9 @@ export default defineConfig({
         orientation: 'portrait',
         icons: [
           {
-            src: 'favicon.svg',
+            src: 'kapitbahaylogo.png',
             sizes: 'any',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'any maskable'
           }
         ]

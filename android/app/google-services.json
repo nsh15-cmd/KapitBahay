@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "439494188848",
+    "project_id": "kapitbahay-33c2b",
+    "storage_bucket": "kapitbahay-33c2b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:439494188848:android:0eaf01a9be71a011e5f2f5",
+        "android_client_info": {
+          "package_name": "com.liteops.kapitbahay"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "439494188848-rg6mv2iabsktqocl1bings6h1njhetiq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC5uaMd2emvq5hDs2MhYras4yFwKOEI_6E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "439494188848-rg6mv2iabsktqocl1bings6h1njhetiq.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

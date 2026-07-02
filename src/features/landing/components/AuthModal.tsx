@@ -1,13 +1,18 @@
+// C:\Users\Renz Jericho Buday\KapitBahay\src\features\landing\components\AuthModal.tsx
 import React, { useState, useEffect } from "react";
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     GoogleAuthProvider,
-    signInWithPopup
+    signInWithPopup,
+    signInWithRedirect,
+    getRedirectResult
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db } from "../../../lib/firebase";
 import { MapPin, Navigation, Shield, User, Building2, ChevronRight, AlertCircle, Mail, Lock, X } from "lucide-react";
+import { Capacitor } from '@capacitor/core';
+
 type RoleType = "user" | "lgu" | "admin" | null;
 type TabType = "signup" | "login";
 
@@ -50,8 +55,48 @@ export const AuthModal: React.FC<ModalProps> = ({
     const [isLoading, setIsLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
 
+    // --- HANDLE REDIRECT RESULT FOR ANDROID/CAPACITOR ---
+    useEffect(() => {
+        const checkRedirect = async () => {
+            setIsLoading(true);
+            try {
+                const result = await getRedirectResult(auth);
+                if (result && result.user) {
+                    const authenticatedUser = result.user;
+                    const docRef = doc(db, "users", authenticatedUser.uid);
+                    const docSnap = await getDoc(docRef);
+
+                    // We assume redirect is mostly used for login. 
+                    // If it's a new user, they will be forced to the signup tab to complete their profile.
+                    if (docSnap.exists()) {
+                        routeByExplicitRole(docSnap.data().role);
+                    } else {
+                        setErrorMsg("We couldn't find a complete profile. Please fill in the remaining details to finish signing up!");
+                        setIsGoogleAuth(true);
+                        setGoogleUserObj(authenticatedUser);
+                        setEmail(authenticatedUser.email || "");
+                        if (authenticatedUser.displayName) {
+                            const parts = authenticatedUser.displayName.split(" ");
+                            setFirstName(parts[0]);
+                            setLastName(parts.slice(1).join(" ") || "");
+                        }
+                        setActiveTab("signup");
+                    }
+                }
+            } catch (error: any) {
+                setErrorMsg(error.message || "Failed to resolve Google Authentication redirect.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        checkRedirect();
+    }, []);
+    // ----------------------------------------------------
+
     useEffect(() => {
         setErrorMsg("");
+        // ... (Keep existing state resets) ...
         setEmail("");
         setPassword("");
         setFirstName("");
@@ -83,6 +128,7 @@ export const AuthModal: React.FC<ModalProps> = ({
     }, [isOpen, onClose]);
 
     const handleGetCurrentLocation = () => {
+        // ... (Keep existing geolocation logic) ...
         if (!navigator.geolocation) {
             setLocationStatus("Geolocation is not supported by your browser.");
             return;
@@ -112,8 +158,19 @@ export const AuthModal: React.FC<ModalProps> = ({
     const handleGoogleAuth = async (isLoginMode: boolean) => {
         setIsLoading(true);
         setErrorMsg("");
+        const provider = new GoogleAuthProvider();
+
         try {
-            const provider = new GoogleAuthProvider();
+            // Check if running as a native Android app via Capacitor
+            const isNative = Capacitor.isNativePlatform();
+
+            if (isNative) {
+                // Use redirect for Native Android WebViews to avoid popup blocking
+                await signInWithRedirect(auth, provider);
+                return; // Execution stops here, handle RedirectResult in useEffect
+            }
+
+            // Fallback to popup for standard Web Browsers (PWA)
             const result = await signInWithPopup(auth, provider);
             const authenticatedUser = result.user;
 
@@ -124,7 +181,6 @@ export const AuthModal: React.FC<ModalProps> = ({
                 if (docSnap.exists()) {
                     routeByExplicitRole(docSnap.data().role);
                 } else {
-                    // FIX: If they try to log in but have no profile, force them to the Sign Up tab!
                     setErrorMsg("We couldn't find a complete profile. Please fill in the remaining details to finish signing up!");
                     setIsGoogleAuth(true);
                     setGoogleUserObj(authenticatedUser);
@@ -134,10 +190,9 @@ export const AuthModal: React.FC<ModalProps> = ({
                         setFirstName(parts[0]);
                         setLastName(parts.slice(1).join(" ") || "");
                     }
-                    setActiveTab("signup"); // Flip to sign-up tab automatically
+                    setActiveTab("signup");
                 }
             } else {
-                // Sign-up flow: block if profile already exists
                 if (docSnap.exists()) {
                     setErrorMsg("An account linked to this Google profile already exists. Please switch to Sign In.");
                     return;
@@ -153,7 +208,6 @@ export const AuthModal: React.FC<ModalProps> = ({
                 }
             }
         } catch (err: any) {
-            // Ignore the error if the user just closed the popup manually
             if (err.code !== 'auth/popup-closed-by-user') {
                 setErrorMsg(err.message || "Google authentication handshake failed.");
             }
@@ -163,6 +217,7 @@ export const AuthModal: React.FC<ModalProps> = ({
     };
 
     const handleSignupSubmit = async (e: React.FormEvent) => {
+        // ... (Keep existing signup submit logic) ...
         e.preventDefault();
         setIsLoading(true);
         setErrorMsg("");
@@ -230,6 +285,7 @@ export const AuthModal: React.FC<ModalProps> = ({
     };
 
     const handleLoginSubmit = async (e: React.FormEvent) => {
+        // ... (Keep existing login submit logic) ...
         e.preventDefault();
         setIsLoading(true);
         setErrorMsg("");
@@ -254,6 +310,7 @@ export const AuthModal: React.FC<ModalProps> = ({
     if (!isOpen) return null;
 
     return (
+        // ... (Keep existing JSX return exactly as is) ...
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 dark:bg-[#050E1F]/80 backdrop-blur-md transition-opacity">
             <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white dark:bg-[#0D1B35] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-3xl p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
 

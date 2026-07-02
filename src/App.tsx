@@ -20,6 +20,7 @@ import TriagePriority from "./features/dashboard/components/TriagePriority";
 // Mesh Synchronization Engines
 import { startAutomatedSyncEngine } from "./lib/syncEngine";
 import { initNativeMeshHardware } from "./lib/bluetoothNative";
+import { startCloudSyncDaemon } from "./lib/cloudSync";
 
 interface AuthContextType {
   user: User | null;
@@ -69,6 +70,9 @@ export default function App() {
 
       // 2. Run background local Area Network + WebRTC browser/mesh listeners
       await startAutomatedSyncEngine();
+
+      // 3. Start the cloud sync daemon alongside the mesh engine so online uploads continue.
+      await startCloudSyncDaemon();
       console.log("🤖 Automated Unified Mesh Layer Online.");
     };
 
@@ -202,6 +206,6 @@ function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
   if (!user || (allowedRole !== "any" && role !== allowedRole)) {
     return <Navigate to="/" replace />;
   }
-
+  
   return children ? <>{children}</> : <Outlet />;
 }

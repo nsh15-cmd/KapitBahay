@@ -53,7 +53,7 @@ export default function TriagePriority() {
 
         setActiveAnalysisId(report._id);
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-lite" });
             const prompt = `
         You are an advanced emergency disaster triage dispatch director evaluating community intelligence reports.
         Analyze this report to establish response priority based on immediate threats to human life, entrapment, medical status, or cascading infrastructure failure.
