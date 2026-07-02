@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏘️ KapitBahay
+#  KapitBahay
 **Decentralized, Offline-First Disaster Resilience Mesh**
 
 <!-- Core -->
