@@ -6,6 +6,8 @@ import type { LocalReport, ReportCategory } from "../../../lib/indexedDb";
 import { getDittoInstance } from "../../../lib/ditto";
 import { useOnlineStatus } from "../../../lib/useOnlineStatus";
 import { useAuth } from "../../../App";
+import { requestMeshHardwarePermissions } from "../../../lib/hardwarePermissions";
+import { syncEventEmitter } from "../../../lib/syncEngine";
 import { useReportsStore } from "../../../store/useReportsStore";
 
 const categoryOptions: Array<{
@@ -211,7 +213,21 @@ export default function ReportForm({ onClose }: { onClose?: () => void }) {
     // 1. Store Locally (Absolute source of truth)
     await createReport(newReport);
 
-    // 2. Update Location Cache
+    // 2. Ask for the BLE and location permissions needed for nearby pairing
+    const permissionResult = await requestMeshHardwarePermissions();
+    if (!permissionResult.ok) {
+      console.warn("Nearby pairing permission request was not fully granted:", permissionResult.reason);
+    }
+
+    syncEventEmitter.dispatchEvent(new CustomEvent("report-created", {
+      detail: {
+        title: reportTitle,
+        offline: !isOnline,
+        permissionsOk: permissionResult.ok,
+      },
+    }));
+
+    // 3. Update Location Cache
     if (coords) {
       await saveCachedLocation({
         textReference: locationText.trim() || "Manual Reference Input",
@@ -222,7 +238,7 @@ export default function ReportForm({ onClose }: { onClose?: () => void }) {
       });
     }
 
-    // 3. Push into Automated Ditto P2P Mesh
+    // 4. Push into Automated Ditto P2P Mesh
     try {
       const ditto = await getDittoInstance();
       // Drop heavy base64 strings before pushing to mesh to prevent P2P bandwidth collapse
@@ -233,8 +249,8 @@ export default function ReportForm({ onClose }: { onClose?: () => void }) {
     }
 
     setIsSyncing(false);
-    setSubmitted(true);
     setStatusText(null);
+    onClose?.();
   };
 
   if (submitted) {

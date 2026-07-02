@@ -51,8 +51,8 @@ export const initNativeMeshHardware = async () => {
 
     // Shield Guard: Enforce permissions before executing radio arrays
     const permissionsReady = await requestMeshHardwarePermissions();
-    if (!permissionsReady) {
-        console.error("🛑 Mesh Core: Missing hardware permissions. Stalling background loops.");
+    if (!permissionsReady.ok) {
+        console.error(`🛑 Mesh Core: Missing hardware permissions. Stalling background loops. ${permissionsReady.reason ?? ''}`);
         return;
     }
 

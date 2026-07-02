@@ -4,6 +4,7 @@ import { ChevronRight, FilePlus2, MessageSquare, MapPin, ShieldAlert, Clock3, Wi
 import { useAuth } from "../../../App";
 import { useReportsStore } from "../../../store/useReportsStore";
 import { broadcastReportViaBluetooth } from "../../../lib/bluetoothSharing";
+import { syncEventEmitter } from "../../../lib/syncEngine";
 import ReportForm from "./ReportForm";
 
 const statusLabelMap: Record<string, { label: string; color: string }> = {
@@ -35,12 +36,38 @@ export default function Reports() {
     const [commentText, setCommentText] = useState("");
     const [categoryFilter, setCategoryFilter] = useState<string>("all");
     const [isBroadcasting, setIsBroadcasting] = useState(false);
+    const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
     useEffect(() => {
         hydrateReports();
         const unsubscribe = startLiveStream();
         return () => unsubscribe();
     }, [hydrateReports, startLiveStream]);
+
+    useEffect(() => {
+        const handleSyncNotice = (event: Event) => {
+            const detail = (event as CustomEvent<{ title?: string; offline?: boolean; permissionsOk?: boolean }>).detail;
+            const title = detail?.title?.trim();
+
+            if (event.type === "peer-received") {
+                setSyncNotice(`New report received from a nearby user${title ? `: ${title}` : ""}`);
+            } else if (detail?.offline) {
+                setSyncNotice(`Saved offline and pairing with nearby users${title ? `: ${title}` : ""}`);
+            } else {
+                setSyncNotice(`Syncing with nearby users${title ? `: ${title}` : ""}`);
+            }
+
+            window.setTimeout(() => setSyncNotice(null), 3800);
+        };
+
+        syncEventEmitter.addEventListener("report-created", handleSyncNotice as EventListener);
+        syncEventEmitter.addEventListener("peer-received", handleSyncNotice as EventListener);
+
+        return () => {
+            syncEventEmitter.removeEventListener("report-created", handleSyncNotice as EventListener);
+            syncEventEmitter.removeEventListener("peer-received", handleSyncNotice as EventListener);
+        };
+    }, []);
 
     const selectedReport = useMemo(
         () => reports.find((report) => report._id === selectedReportId) ?? null,
@@ -91,7 +118,7 @@ export default function Reports() {
             if (success) {
                 alert("Bluetooth sharing started. Keep the app open while another nearby device is in range.");
             } else {
-                alert("Bluetooth transfer is not available on this device right now. On Android, please allow Bluetooth, Nearby devices, and Location permissions in the app settings, then try again from a native build.");
+                alert("Bluetooth transfer is not available right now. On Android, please allow Bluetooth and Location permissions for this app, turn on Bluetooth, and try again from a native build.");
             }
         } catch (error) {
             console.error("Bluetooth sharing error:", error);
@@ -125,6 +152,13 @@ export default function Reports() {
                     Report Emergency
                 </button>
             </div>
+
+            {syncNotice && (
+                <div className="mb-5 flex items-center gap-2 rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-700 shadow-sm dark:border-teal-800 dark:bg-teal-900/20 dark:text-teal-300">
+                    <Bluetooth className="h-4 w-4" />
+                    <span>{syncNotice}</span>
+                </div>
+            )}
 
             {/* COLOR-CODED FEED CATEGORY FILTER ROW */}
             <div className={`mb-6 flex gap-3 overflow-x-auto pb-3 pt-1 no-scrollbar border-b border-slate-200 dark:border-slate-800 ${selectedReport ? 'hidden lg:flex' : 'flex'}`}>

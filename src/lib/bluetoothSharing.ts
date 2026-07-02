@@ -3,6 +3,7 @@
 import { Capacitor } from '@capacitor/core';
 import { BluetoothLowEnergy } from '@capgo/capacitor-bluetooth-low-energy';
 import { encryptReport } from "./crypto";
+import { requestMeshHardwarePermissions } from "./hardwarePermissions";
 
 // Web Bluetooth API Profile Definition Parameters
 const DISASTER_SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
@@ -16,17 +17,9 @@ const startNativeBluetoothTransfer = async (reportPayload: any) => {
     if (!isNativeBleAvailable()) return false;
 
     try {
-        const permissionStatus = await BluetoothLowEnergy.requestPermissions();
-        const availability = await BluetoothLowEnergy.isAvailable();
-        const bluetoothEnabled = await BluetoothLowEnergy.isEnabled();
-
-        if (!permissionStatus.bluetooth || !permissionStatus.location) {
-            console.warn("Bluetooth permissions were denied on this device.");
-            return false;
-        }
-
-        if (!availability.available || !bluetoothEnabled.enabled) {
-            console.warn("Bluetooth hardware or radio state is not ready for transfer.");
+        const permissions = await requestMeshHardwarePermissions();
+        if (!permissions.ok) {
+            console.warn(`Bluetooth transfer blocked before launch: ${permissions.reason ?? 'permissions unavailable'}`);
             return false;
         }
 
