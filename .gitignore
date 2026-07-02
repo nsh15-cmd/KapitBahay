@@ -1,0 +1,5 @@
+.env
+.env.*
+.history/
+node_modules/
+dist/
